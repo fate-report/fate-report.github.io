@@ -8,6 +8,34 @@ const MODEL = 'gemini-2.5-flash';
 const ENDPOINT =
   `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
+const STEMS = ['갑', '을', '병', '정', '무', '기', '경', '신', '임', '계'];
+const STEMS_HANJA = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+const BRANCHES = ['자', '축', '인', '묘', '진', '사', '오', '미', '신', '유', '술', '해'];
+const BRANCHES_HANJA = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+
+function yearGanzhi(y) {
+  const idx = ((y - 4) % 60 + 60) % 60;
+  const s = idx % 10;
+  const b = idx % 12;
+  return `${STEMS[s]}${BRANCHES[b]}(${STEMS_HANJA[s]}${BRANCHES_HANJA[b]})`;
+}
+
+function buildKstTimeAnchor() {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const rawY = kst.getUTCFullYear();
+  const y = rawY >= 2026 ? rawY : 2026;
+  const m = kst.getUTCMonth() + 1;
+  const d = kst.getUTCDate();
+  const sajuYear = (m === 1 || (m === 2 && d < 4)) ? y - 1 : y;
+  return [
+    `[시스템 절대 시간 락 (KST 실시간 기준 — 하네스 1 최우선 강제)]`,
+    `- 오늘 실제 날짜: ${y}년 ${m}월 ${d}일`,
+    `- '올해(현재 연도)' = ${y}년 ${yearGanzhi(sajuYear)}년 세운`,
+    `- '내년' = ${y + 1}년 ${yearGanzhi(sajuYear + 1)}년 / '작년' = ${y - 1}년 ${yearGanzhi(sajuYear - 1)}년`,
+    `- [절대 금지 경고]: 모델의 과거 사전학습 시점(2024년 갑진년이나 2025년 을사년)을 '올해/현재'라고 부르거나 2024년 기준으로 나이와 대운을 역산하는 환각을 엄격히 금지합니다. 모든 '올해/지금' 표현은 반드시 ${y}년(${yearGanzhi(sajuYear)}년)으로만 해석하세요.`,
+  ].join('\n');
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -45,9 +73,13 @@ export async function onRequestPost(context) {
     return json({ error: 'bad_request', message: 'prompt 없음' }, 400);
   }
 
+  const timeAnchor = buildKstTimeAnchor();
+  const finalSystem = system ? `${timeAnchor}\n\n${system}` : timeAnchor;
+  const finalPrompt = `${timeAnchor}\n\n${prompt}`;
+
   const geminiBody = {
-    system_instruction: { parts: [{ text: system }] },
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    system_instruction: { parts: [{ text: finalSystem }] },
+    contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.65,

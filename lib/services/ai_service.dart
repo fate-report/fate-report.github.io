@@ -41,6 +41,7 @@ class AiService {
   static Future<AnalysisResult> generateAnalysis({
     required UserProfile user,
     PartnerProfile? partner,
+    CompatComputation? comp,
     required AnalysisCategory category,
     required String userQuestion,
   }) async {
@@ -58,6 +59,7 @@ class AiService {
     final prompt = PromptBuilder.buildGeneral(
       user: user,
       partner: partner,
+      comp: comp,
       category: category,
       userQuestion: userQuestion,
     );

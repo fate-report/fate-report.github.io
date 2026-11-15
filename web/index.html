@@ -42,6 +42,11 @@
         for (var r of regs) { r.unregister(); }
       });
     }
+    if ('caches' in window) {
+      caches.keys().then(function (ks) {
+        for (var k of ks) { caches.delete(k); }
+      });
+    }
   </script>
 </head>
 <body>

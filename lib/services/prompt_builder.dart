@@ -1,13 +1,71 @@
 import '../content/copy.dart';
 import '../models/models.dart';
 import '../compat/compat_engine.dart';
+import '../manseryeok/saju_calculator.dart';
 
 /// PromptBuilder — 범용 사주·운세·궁합 AI 마스터 엔진 (K01~K10 100% 무삭제 확장판 + 4인 JEV 하네스 락).
 /// 앱 코드(SajuCalculator, CompatEngine)가 계산한 K04 확정 명식 및 K07-R3 채점표를
 /// 동적 슬롯에 고정(Lock) 주입하고, AI는 K01~K10 전수 대조 및 4인 하네스 검증을 거쳐 응답한다.
 class PromptBuilder {
+  /// 실시간 현재 날짜·세운·월운·일진 및 사용자/상대 나이 고정 잠금 블록 (2024년 과거 시점 환각 원천 차단)
+  static String buildTemporalLockBlock({
+    DateTime? now,
+    UserProfile? user,
+    PartnerProfile? partner,
+  }) {
+    final rawNow = now ?? DateTime.now();
+    final dt = rawNow.year >= 2026
+        ? rawNow
+        : DateTime(2026, rawNow.month, rawNow.day, rawNow.hour, rawNow.minute);
+    final todaySaju = SajuCalculator.calculate(
+      year: dt.year,
+      month: dt.month,
+      day: dt.day,
+      hour: dt.hour,
+      minute: dt.minute,
+      applyLocalTime: false,
+    );
+    final thisYearGanji = SajuCalculator.seunPillarOfYear(dt.year);
+    final nextYearGanji = SajuCalculator.seunPillarOfYear(dt.year + 1);
+    final prevYearGanji = SajuCalculator.seunPillarOfYear(dt.year - 1);
+
+    String ageLock = '';
+    if (user?.birthDate != null) {
+      final b = user!.birthDate!;
+      final krAge = dt.year - b.year + 1;
+      final manAge = dt.year -
+          b.year -
+          ((dt.month < b.month || (dt.month == b.month && dt.day < b.day))
+              ? 1
+              : 0);
+      ageLock +=
+          '\n- 본인 현재 나이(${dt.year}년 기준): 만 $manAge세 (연 나이 $krAge세)';
+    }
+    if (partner?.partnerBirthDate != null) {
+      final pb = partner!.partnerBirthDate!;
+      final pKrAge = dt.year - pb.year + 1;
+      final pManAge = dt.year -
+          pb.year -
+          ((dt.month < pb.month || (dt.month == pb.month && dt.day < pb.day))
+              ? 1
+              : 0);
+      ageLock +=
+          '\n- 상대 현재 나이(${dt.year}년 기준): 만 $pManAge세 (연 나이 $pKrAge세)';
+    }
+
+    return '''[0. 절대 시점 및 세운·월운·나이 기준 Lock (Temporal Hard Lock — 하네스 1 최우선 강제)]
+- 오늘 실시간 날짜: ${dt.year}년 ${dt.month}월 ${dt.day}일
+- '올해(현재 연도)' = ${dt.year}년 $thisYearGanji년 세운 | '작년' = ${dt.year - 1}년 $prevYearGanji년 | '내년' = ${dt.year + 1}년 $nextYearGanji년
+- '이번 달(현재 절기 월운, K02·K05)' = ${todaySaju.monthPillar}(${todaySaju.monthPillarHanja})월 | '오늘 일진' = ${todaySaju.dayPillar}(${todaySaju.dayPillarHanja})일$ageLock
+- [절대 금지 경고]: 사전학습 데이터의 과거 시점인 "2024년(갑진년)"이나 "2025년(을사년)"을 '올해/현재'라고 부르거나 2024년 기준으로 나이와 대운을 역산하는 행위를 절대 금지합니다. 모든 '올해/이번 달/지금' 표현은 반드시 ${dt.year}년($thisYearGanji년) 기준이어야 합니다.''';
+  }
+
   static String systemInstruction() {
-    return r'''
+    final temporalHeader = buildTemporalLockBlock();
+    return '$temporalHeader\n\n$_rawSystemInstruction';
+  }
+
+  static const String _rawSystemInstruction = r'''
 # 범용 사주·운세·궁합 AI 마스터 엔진 (사주 앱 탑재용 | 개인정보 제거 완료 + K01~K10 100% 무삭제 확장판 + 4인 하네스 생략방지·정밀검산 락)
 
 ## 0. 최상위 서비스 목적 및 맞춤형 소통 원칙
@@ -189,12 +247,12 @@ class PromptBuilder {
 
  반드시 요청된 JSON 스키마로만 응답하세요. 코드블록(```json) 없이 순수 JSON 객체만 출력합니다.
 ''';
-  }
 
   /// 일반 사주 분석 프롬프트 (0절 Track A: 글머리 기호 없는 다정한 문단 브리핑 + K09 4대 축 + K10 세운 결합)
   static String buildGeneral({
     required UserProfile user,
     PartnerProfile? partner,
+    CompatComputation? comp,
     required AnalysisCategory category,
     required String userQuestion,
   }) {
@@ -208,6 +266,7 @@ class PromptBuilder {
     final birthTimeStr =
         user.birthTimeUnknown ? '출생시간 미상' : (user.birthTime ?? '출생시간 미상');
     final categoryName = _categoryName(category);
+    final temporalLock = buildTemporalLockBlock(user: user, partner: partner);
 
     String partnerBlock = '';
     if (partner != null && (partner.partnerDayPillar?.isNotEmpty ?? false)) {
@@ -215,11 +274,21 @@ class PromptBuilder {
       final pName = partner.partnerName.trim().isEmpty
           ? '상대분'
           : partner.partnerName.trim();
+      final effectiveComp = comp ??
+          CompatEngine.compute(
+            me: s,
+            partner: ps,
+            calendarClear: user.calendarType != 'unknown' &&
+                partner.partnerCalendarType != 'unknown',
+          );
+      final compatFactSection = effectiveComp.compatibilityAvailable
+          ? '\n[코드가 계산한 두 사람 관계 구조 팩트 (K07-R3 Data Lock — 임의 암산 금지)]\n${effectiveComp.toK07SummaryBlock()}'
+          : '';
       partnerBlock = '''
 
 [상대방 확정 명식 슬롯 (K04 읽기 전용 — 본인 명식과 혼동 금지)]
 - 이름/호칭: $pName (${partner.partnerGender == 'male' ? '남성' : '여성'}, 현재 관계: ${partner.relationStatus})
-${ps.toDetailedSlotText(gender: partner.partnerGender)}
+${ps.toDetailedSlotText(gender: partner.partnerGender)}$compatFactSection
 ''';
     }
 
@@ -229,11 +298,12 @@ ${ps.toDetailedSlotText(gender: partner.partnerGender)}
         userQuestion.contains('내년');
 
     return '''
+$temporalLock
+
 [1. 동적 사용자 명식 슬롯 (Session Data Lock — K04 기준)]
 - 호칭/이름: $callName
 - 성별 / 출생정보: $genderStr / $birthDateStr $birthTimeStr / 출생지: ${user.birthPlace ?? '서울(기본)'}
 ${s.toDetailedSlotText(gender: user.gender)}
-- 현재 기준 연도 세운(K03): 2026년 병오(丙午)년 (내년: 2027년 정미(丁未)년)
 $partnerBlock
 [질문 카테고리 및 사용자 실제 고민]
 - 선택 카테고리: $categoryName
@@ -278,9 +348,12 @@ $partnerBlock
     final pName = partner.partnerName.trim().isEmpty
         ? '상대분'
         : partner.partnerName.trim();
+    final temporalLock = buildTemporalLockBlock(user: user, partner: partner);
 
     if (!comp.compatibilityAvailable) {
       return '''
+$temporalLock
+
 [궁합 해석 - K08 강제 브레이크에 따른 판정 보류]
 코드 판정 결과: 판정 보류(GRAY). 사유: ${comp.holdReason}
 
@@ -310,6 +383,8 @@ K08 기준에 따라 억지로 점수를 단정하지 말고, 왜 보류인지 �
     final factsText = comp.factsForAi.map((f) => '  • $f').join('\n');
 
     return '''
+$temporalLock
+
 [1. 양측 동적 명식 슬롯 (Session Data Lock — K04 기준)]
 ■ 본인 ($myName / ${user.gender == 'male' ? '남성' : '여성'}):
 ${me.toDetailedSlotText(gender: user.gender)}
@@ -330,7 +405,7 @@ ${userQuestion.isEmpty ? '두 사람의 궁합 점수와 잘 맞는 점, 부딪�
 1. **궁합 암산 금지 및 정량 요약 상단 제시 (K07-R3 락)**:
    - `briefingBody` 맨 첫머리에 위 `[궁합 정량 요약: 총점 ${comp.compatibilityScore}점 ...]` 블록(항목별 득점/만점 및 기본 점수 + 실제 작용 글자 가감 근거 포함)을 **단 1점의 변경도 없이** 먼저 제시하세요.
 2. **두 사람의 K09 실전 통변 4대 축 입체 해설**:
-   - 정량 요약 아래에는 **첫 문장 명확한 결론**을 제시한 뒤, 굵은 소제목(예: `**두 사람이 서로에게 끌리는 진짜 이유**`, `**현실 연애와 대화에서 부딪히기 쉬운 순간**`, `**2026년 관계 흐름과 맞춤 소통 전략**`)을 활용해 두 사람의 기질·계절 온도(조후)·배우자궁(일지) 작용과 오행 보완이 실제 대화 습관, 서운함 포인트, 갈등 해법으로 어떻게 나타나는지 다정하고 깊이 있게 풀어주세요. (전문 용어는 일상 심리·행동 언어로 번역)
+   - 정량 요약 아래에는 **첫 문장 명확한 결론**을 제시한 뒤, 굵은 소제목(예: `**두 사람이 서로에게 끌리는 진짜 이유**`, `**현실 연애와 대화에서 부딪히기 쉬운 순간**`, `**2026년 병오년 관계 흐름과 맞춤 소통 전략**`)을 활용해 두 사람의 기질·계절 온도(조후)·배우자궁(일지) 작용과 오행 보완이 실제 대화 습관, 서운함 포인트, 갈등 해법으로 어떻게 나타나는지 다정하고 깊이 있게 풀어주세요. (전문 용어는 일상 심리·행동 언어로 번역)
 3. **하네스 4 종료 태그**:
    - `auditFooter`에는 반드시 `[적용 기준: K04, K06, K07-R3, K08, K09, K10 | 확신도: ${comp.hourIncluded ? 'HIGH(높음)' : 'MEDIUM(보통)'}]` 형식으로 표기하세요.
 
@@ -363,6 +438,7 @@ ${userQuestion.isEmpty ? '두 사람의 궁합 점수와 잘 맞는 점, 부딪�
     final me = user.toSaju();
     final myName =
         user.userName.trim().isEmpty ? '회원님' : '${user.userName.trim()}님';
+    final temporalLock = buildTemporalLockBlock(user: user, partner: partner);
 
     String partnerSection = '';
     if (partner != null && (partner.partnerDayPillar?.isNotEmpty ?? false)) {
@@ -386,12 +462,13 @@ ${comp != null ? '\n[확정 궁합 채점표 (K07-R3 고정 — 점수 변경 �
             .join('\n\n');
 
     return '''
+$temporalLock
+
 [1. 세션 고정 사용자 명식 슬롯 (Session Data Lock — K04)]
 - 호칭: $myName (${user.gender == 'male' ? '남성' : '여성'})
 ${me.toDetailedSlotText(gender: user.gender)}
-- 현재 기준 세운(K03): 2026년 병오(丙午)년 / 2027년 정미(丁未)년
 $partnerSection
-[앞선 리포트 요약 컨텍스트]
+[앞서 전달한 마스터 브리핑 본문 (이미 설명한 문장·비유·기본 사주 설명을 앵무새처럼 반복하지 말 것)]
 $initialBriefingSummary
 
 [이전 후속 대화 내역]
@@ -401,7 +478,7 @@ $historyText
 "$followUpQuestion"
 
 [꼬리 질문 필수 응답 규칙 (0절 1~5항 & 하네스 1~4)]
-1. **앵무새 반복 절대 금지 (0절 4항)**: 앞에서 이미 설명한 기본 사주 전체를 다시 읊지 마세요. 사용자가 방금 물은 핵심 지점과 그 판단 근거(K01~K10)에만 집중해서 첫 문장에 명확한 결론부터 자연스럽게 이어 답하세요.
+1. **앵무새 반복 절대 금지 (0절 4항)**: 위 [앞서 전달한 마스터 브리핑 본문]에서 이미 설명한 기본 사주 전체를 다시 읊지 마세요. 사용자가 방금 물은 핵심 지점과 그 판단 근거(K01~K10)에만 집중해서 첫 문장에 명확한 결론부터 자연스럽게 이어 답하세요.
 2. **유도리 있는 길이 및 포맷 조절**:
    - 사용자가 짧게("한 줄로", "결론만", "짧게", "점수만") 물었다면 핵심만 간결하게 답하세요.
    - "명리적으로 자세히 설명해줘"라고 물었다면 쉬운 결론을 먼저 말한 뒤 실제 작용한 간지·십성·지장간·조후·합충 근거를 상세히 풀어주세요.

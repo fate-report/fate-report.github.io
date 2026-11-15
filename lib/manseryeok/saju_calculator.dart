@@ -2,6 +2,7 @@ import 'ganzhi.dart';
 import 'birth_place.dart';
 import 'dst_correction.dart';
 import 'solar_terms.dart';
+import 'lunar_converter.dart';
 
 /// 사주 계산 결과 (K01~K05, K08, K09 메타데이터 포함).
 class SajuResult {
@@ -77,6 +78,10 @@ class SajuResult {
     final warnText = boundaryWarnings.isEmpty
         ? '없음 (정상 확정)'
         : boundaryWarnings.join(' | ');
+    final now = DateTime.now();
+    final curYear = now.year >= 2026 ? now.year : 2026;
+    final thisYearGanji = SajuCalculator.seunPillarOfYear(curYear);
+    final nextYearGanji = SajuCalculator.seunPillarOfYear(curYear + 1);
 
     return '''
 - 확정 4주: $yearPillar($yearPillarHanja)년 $monthPillar($monthPillarHanja)월 $dayPillar($dayPillarHanja)일 ${hourUnknown || hourPillar == null ? '(시간 미상 — 3주 6글자 기준)' : '$hourPillar($hourPillarHanja)시'} (기준 일간: $dm / ${stemElements[dm] ?? ''})
@@ -86,7 +91,8 @@ class SajuResult {
   • ${describePillar('시주', hourUnknown ? null : hourPillar)}
 - 3주 6글자 본기 오행 분포(시주·지장간 제외, K07-R3 기준): $elText
 - 대운 흐름(K04): ${daeunSummary.isEmpty ? '(미산출)' : daeunSummary}
-- K05/K08 경계 점검: $warnText''';
+- K05/K08 경계 점검: $warnText
+- [시간 기준점 락 (K03·K10)]: 현재 연도(올해)는 $curYear년($thisYearGanji년)이며, 내년은 ${curYear + 1}년($nextYearGanji년)입니다. (과거 학습 시점인 2024년 갑진년이나 2025년 을사년을 '올해'로 착각하는 환각 절대 금지)''';
   }
 }
 
@@ -102,6 +108,12 @@ class SajuCalculator {
   static final DateTime _refDateUtc = DateTime.utc(1900, 1, 1);
   static const int _refDayIndex = 10;
 
+  /// 특정 연도의 K03 세운 간지 반환 (예: 2026 -> '병오(丙午)')
+  static String seunPillarOfYear(int year) {
+    final idx = ((year - 4) % 60 + 60) % 60;
+    return '${ganzhiFromIndex(idx)}(${ganzhiHanjaFromIndex(idx)})';
+  }
+
   static SajuResult calculate({
     required int year,
     required int month,
@@ -116,20 +128,40 @@ class SajuCalculator {
     final hourUnknown = hour == null;
     final warnings = <String>[];
 
+    int sYear = year;
+    int sMonth = month;
+    int sDay = day;
+
     if (calendarType == 'lunar') {
-      warnings.add(
-        '[K08 음력 입력 주의] 음력 생일이 입력되었습니다. STEP 2에서 만세력 글자(년·월·일·시주)가 본인 실제 만세력과 일치하는지 확인하거나 직접 수정해 주세요.',
-      );
+      final conv = LunarConverter.toSolar(year, month, day);
+      if (conv != null) {
+        sYear = conv.solarDate.year;
+        sMonth = conv.solarDate.month;
+        sDay = conv.solarDate.day;
+        if (conv.hasLeapMonthInSameMonth) {
+          warnings.add(
+            '[K08 음력·윤달 경계 확인] 음력 $year년 $month월 $day일 → 양력 $sYear년 $sMonth월 $sDay일(평달 기준)로 자동 변환했습니다. $year년은 윤$month월이 존재하는 해이므로, 윤달 출생이시라면 STEP 2에서 [만세력 글자 직접 수정]으로 고정해 주세요.',
+          );
+        } else {
+          warnings.add(
+            '[음력→양력 자동 변환 완료] 음력 $year년 $month월 $day일 → 양력 $sYear년 $sMonth월 $sDay일로 자동 변환하여 계산했습니다.',
+          );
+        }
+      } else {
+        warnings.add(
+          '[K08 음력 입력 주의] 음력 생일이 입력되었습니다. STEP 2에서 만세력 글자(년·월·일·시주)가 본인 실제 만세력과 일치하는지 확인하거나 직접 수정해 주세요.',
+        );
+      }
     }
 
     // K05/K08 절입일 전후 48시간 경계 점검
-    final termWarn = SolarTerms.checkTermBoundaryWarning(year, month, day);
+    final termWarn = SolarTerms.checkTermBoundaryWarning(sYear, sMonth, sDay);
     if (termWarn != null) {
       warnings.add('[K05/K08 절기 경계] $termWarn');
     }
 
     // 1) 기본 일시 및 서머타임/진태양시 보정 (시주 산출용)
-    DateTime rawDt = DateTime(year, month, day, hour ?? 12, minute ?? 0);
+    DateTime rawDt = DateTime(sYear, sMonth, sDay, hour ?? 12, minute ?? 0);
     DateTime solarDt = applyDstCorrection(rawDt);
     if (applyLocalTime && !hourUnknown) {
       final offset = trueSolarOffsetMinutes(placeName);
@@ -137,16 +169,16 @@ class SajuCalculator {
     }
 
     // 2) 일주(日柱): 출생 양력 날짜(UTC 기준 경과일수)로 정확히 산출
-    final daysDiff = DateTime.utc(year, month, day).difference(_refDateUtc).inDays;
+    final daysDiff = DateTime.utc(sYear, sMonth, sDay).difference(_refDateUtc).inDays;
     final dayIdx = ((_refDayIndex + daysDiff) % 60 + 60) % 60;
     final dayStem = heavenlyStems[dayIdx % 10];
     final dayBranch = earthlyBranches[dayIdx % 12];
 
     // 3) 년주(年柱): 입춘 기준. 월지 인덱스가 '축'(11)이고 1~2월 초면 전년 처리.
-    final monthBr = SolarTerms.monthBranchIndex(year, month, day);
-    int sajuYear = year;
-    if ((month == 1) || (month == 2 && monthBr == 11)) {
-      sajuYear = year - 1;
+    final monthBr = SolarTerms.monthBranchIndex(sYear, sMonth, sDay);
+    int sajuYear = sYear;
+    if ((sMonth == 1) || (sMonth == 2 && monthBr == 11)) {
+      sajuYear = sYear - 1;
     }
     // 1864년이 갑자년(년간지 index 0). (year-4)%60 공식 사용.
     final yearIdx = ((sajuYear - 4) % 60 + 60) % 60;
@@ -186,9 +218,9 @@ class SajuCalculator {
       yearStem: yearStem,
       monthPillar: monthStem + monthBranchStr,
       gender: gender,
-      birthYear: year,
-      birthMonth: month,
-      birthDay: day,
+      birthYear: sYear,
+      birthMonth: sMonth,
+      birthDay: sDay,
     );
 
     final yPillar = yearStem + yearBranch;
@@ -212,7 +244,53 @@ class SajuCalculator {
     );
   }
 
-  /// K04 대운 방향 및 10년 대운 리스트 생성
+  /// STEP 2에서 사용자가 직접 사주 8글자를 수정했을 때 대운(daeunSummary)과 한자를 즉시 재계산
+  static SajuResult recalculateWithManualPillars({
+    required String yearPillar,
+    required String monthPillar,
+    required String dayPillar,
+    String? hourPillar,
+    required String gender,
+    DateTime? birthDate,
+  }) {
+    final yp = yearPillar.trim();
+    final mp = monthPillar.trim();
+    final dp = dayPillar.trim();
+    final hp = (hourPillar == null || hourPillar.trim().isEmpty)
+        ? null
+        : hourPillar.trim();
+    final dm = dp.isNotEmpty ? dp[0] : '';
+
+    final daeun = (yp.isNotEmpty && mp.length >= 2)
+        ? buildDaeunSummary(
+            yearStem: yp[0],
+            monthPillar: mp,
+            gender: gender,
+            birthYear: birthDate?.year ?? 1995,
+            birthMonth: birthDate?.month ?? 6,
+            birthDay: birthDate?.day ?? 15,
+          )
+        : '';
+
+    return SajuResult(
+      yearPillar: yp,
+      monthPillar: mp,
+      dayPillar: dp,
+      hourPillar: hp,
+      dayMaster: dm,
+      hourUnknown: hp == null,
+      yearPillarHanja: pillarToHanja(yp),
+      monthPillarHanja: pillarToHanja(mp),
+      dayPillarHanja: pillarToHanja(dp),
+      hourPillarHanja: hp == null ? null : pillarToHanja(hp),
+      daeunSummary: daeun,
+      boundaryWarnings: const [
+        '[K04 수동 확정 완료] 사용자가 직접 확인·수정한 명식(K04 최우선 기준)으로 고정되었습니다.',
+      ],
+    );
+  }
+
+  /// K04 대운 방향 및 10년 대운 리스트 생성 (현재 나이 및 현재 해당 대운 핀포인트 표시)
   /// 양년(갑·병·무·경·임) 남 / 음년(을·정·기·신·계) 여 → 순행
   /// 음년 남 / 양년 여 → 역행
   static String buildDaeunSummary({
@@ -238,6 +316,12 @@ class SajuCalculator {
       forward: forward,
     );
 
+    final now = DateTime.now();
+    final currentYear = now.year >= 2026 ? now.year : 2026;
+    final manAge = (currentYear - birthYear).clamp(0, 120);
+    final koreanAge = (currentYear - birthYear + 1).clamp(1, 120);
+
+    String currentDaeunTag = '';
     final pillars = <String>[];
     for (int i = 1; i <= 8; i++) {
       final step = forward ? (mIdx + i) : (mIdx - i);
@@ -245,9 +329,18 @@ class SajuCalculator {
       final hanja = ganzhiHanjaFromIndex(step);
       final aStart = startAge + (i - 1) * 10;
       final aEnd = aStart + 9;
-      pillars.add('$p($hanja)[$aStart~$aEnd세]');
+      final isCurrent = (manAge >= aStart && manAge <= aEnd) ||
+          (currentDaeunTag.isEmpty && koreanAge >= aStart && koreanAge <= aEnd);
+      if (isCurrent && currentDaeunTag.isEmpty) {
+        currentDaeunTag = '$p($hanja)[$aStart~$aEnd세]';
+        pillars.add('★$p($hanja)[$aStart~$aEnd세·현재]');
+      } else {
+        pillars.add('$p($hanja)[$aStart~$aEnd세]');
+      }
     }
-    return '$dirLabel (대운수 약 $startAge, 절입일 근사 기준): ${pillars.join(' → ')}';
+    final activeDesc =
+        currentDaeunTag.isEmpty ? '초년 대운 진입 전' : currentDaeunTag;
+    return '$dirLabel (대운수 약 $startAge | $currentYear년 현재 만 $manAge세·연 $koreanAge세 → 현재 대운: $activeDesc): ${pillars.join(' → ')}';
   }
 
   /// 오호둔(K02 월두법): 년간에 따라 인월(寅月)의 월간이 정해지고 순행.

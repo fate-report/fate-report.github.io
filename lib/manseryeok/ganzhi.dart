@@ -71,7 +71,7 @@ const Map<String, Map<String, String>> twelveStagesTable = {
   },
   '정': {
     '유': '장생', '신': '목욕', '미': '관대', '오': '건록', '사': '제왕', '진': '쇠',
-    '묘': '병', '인': '사', '축': '묘', '자': '절', '해': '태', '戌': '양', '술': '양',
+    '묘': '병', '인': '사', '축': '묘', '자': '절', '해': '태', '술': '양',
   },
   '무': {
     '인': '장생', '묘': '목욕', '진': '관대', '사': '건록', '오': '제왕', '미': '쇠',
@@ -151,11 +151,18 @@ String ganzhiHanjaFromIndex(int idx) {
 
 /// 한글 간지 2글자('갑자')로부터 60갑자 인덱스(0~59) 찾기
 int ganzhiIndexOf(String pillar) {
-  if (pillar.length < 2) return -1;
+  final p = pillar.trim();
+  if (p.length != 2) return -1;
   for (int i = 0; i < 60; i++) {
-    if (ganzhiFromIndex(i) == pillar) return i;
+    if (ganzhiFromIndex(i) == p) return i;
   }
   return -1;
+}
+
+/// 입력된 한글 2글자가 실제 60갑자에 존재하는 유효한 간지인지 검증 (예: '갑자'=true, '갑유'=false)
+bool isValidGanzhiPillar(String? pillar) {
+  if (pillar == null) return false;
+  return ganzhiIndexOf(pillar) != -1;
 }
 
 /// 천간 인덱스

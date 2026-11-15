@@ -62,14 +62,26 @@ class _ResultScreenState extends State<ResultScreen> {
       _error = null;
     });
     try {
-      if (_isCompat) {
+      if (widget.partner != null &&
+          (widget.partner!.partnerDayPillar?.isNotEmpty ?? false)) {
         final calendarClear = widget.user.calendarType != 'unknown' &&
-            (widget.partner?.partnerCalendarType ?? 'unknown') != 'unknown';
-        final comp = CompatEngine.compute(
+            widget.partner!.partnerCalendarType != 'unknown';
+        _compatComp = CompatEngine.compute(
           me: widget.user.toSaju(),
           partner: widget.partner!.toSaju(),
           calendarClear: calendarClear,
         );
+      }
+
+      if (_isCompat) {
+        final calendarClear = widget.user.calendarType != 'unknown' &&
+            (widget.partner?.partnerCalendarType ?? 'unknown') != 'unknown';
+        final comp = _compatComp ??
+            CompatEngine.compute(
+              me: widget.user.toSaju(),
+              partner: widget.partner!.toSaju(),
+              calendarClear: calendarClear,
+            );
         _compatComp = comp;
         final result = await AiService.generateCompatibility(
           user: widget.user,
@@ -86,6 +98,7 @@ class _ResultScreenState extends State<ResultScreen> {
         final result = await AiService.generateAnalysis(
           user: widget.user,
           partner: widget.partner,
+          comp: _compatComp,
           category: widget.category,
           userQuestion: widget.userQuestion,
         );
@@ -122,8 +135,8 @@ class _ResultScreenState extends State<ResultScreen> {
 
     try {
       final summaryContext = _isCompat
-          ? (_compat?.finalJudgment ?? '')
-          : (_general?.resultSummary ?? '');
+          ? '[핵심 결론] ${_compat?.finalJudgment ?? ""}\n\n[앞서 전달한 마스터 브리핑 전문]\n${_compat?.briefingBody ?? ""}'
+          : '[핵심 결론] ${_general?.keyPoint ?? ""}\n[요약] ${_general?.resultSummary ?? ""}\n\n[앞서 전달한 마스터 브리핑 전문]\n${_general?.briefingBody ?? ""}';
       final reply = await AiService.generateFollowUp(
         user: widget.user,
         partner: widget.partner,

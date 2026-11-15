@@ -365,7 +365,7 @@ class _StepBasicInfo extends StatelessWidget {
   }
 }
 
-class _PersonForm extends StatelessWidget {
+class _PersonForm extends StatefulWidget {
   final String label;
   final String name;
   final String gender;
@@ -401,18 +401,59 @@ class _PersonForm extends StatelessWidget {
   });
 
   @override
+  State<_PersonForm> createState() => _PersonFormState();
+}
+
+class _PersonFormState extends State<_PersonForm> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _timeCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.name);
+    _timeCtrl = TextEditingController(text: widget.time ?? '');
+  }
+
+  @override
+  void didUpdateWidget(covariant _PersonForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.name != _nameCtrl.text) {
+      _nameCtrl.value = TextEditingValue(
+        text: widget.name,
+        selection: TextSelection.collapsed(offset: widget.name.length),
+      );
+    }
+    final targetTime = widget.time ?? '';
+    if (targetTime != _timeCtrl.text) {
+      _timeCtrl.value = TextEditingValue(
+        text: targetTime,
+        selection: TextSelection.collapsed(offset: targetTime.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _timeCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SoftCard(
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
+          Text(widget.label,
               style: AppTheme.serif(size: 16, weight: FontWeight.w700)),
           const SizedBox(height: 14),
           TextField(
+            controller: _nameCtrl,
             decoration: _dec('이름 / 닉네임 (예: 지민)'),
-            onChanged: onName,
+            onChanged: widget.onName,
           ),
           const SizedBox(height: 12),
           Row(
@@ -420,8 +461,8 @@ class _PersonForm extends StatelessWidget {
               Expanded(
                 child: _Choice(
                   options: const {'female': '여성', 'male': '남성'},
-                  value: gender,
-                  onChanged: onGender,
+                  value: widget.gender,
+                  onChanged: widget.onGender,
                 ),
               ),
             ],
@@ -429,10 +470,10 @@ class _PersonForm extends StatelessWidget {
           const SizedBox(height: 12),
           _Choice(
             options: const {'solar': '양력', 'lunar': '음력'},
-            value: calendar,
-            onChanged: onCalendar,
+            value: widget.calendar,
+            onChanged: widget.onCalendar,
           ),
-          if (calendar == 'lunar') ...[
+          if (widget.calendar == 'lunar') ...[
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(10),
@@ -441,7 +482,7 @@ class _PersonForm extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
-                '※ 음력 선택 시 STEP 2(명식확인)에서 알고 계신 만세력 글자(년·월·일·시주)로 직접 수정·확정할 수 있습니다.',
+                '※ 음력 선택 시 한국 표준 만세력 기준으로 양력 날짜를 자동 변환하여 계산하며, 윤달 출생 등은 STEP 2에서 직접 수정·확정할 수 있습니다.',
                 style: AppTheme.sans(size: 11.5, color: AppColors.primary),
               ),
             ),
@@ -451,11 +492,11 @@ class _PersonForm extends StatelessWidget {
             onTap: () async {
               final picked = await showDatePicker(
                 context: context,
-                initialDate: date ?? DateTime(1998, 5, 15),
+                initialDate: widget.date ?? DateTime(1998, 5, 15),
                 firstDate: DateTime(1920),
                 lastDate: DateTime.now(),
               );
-              if (picked != null) onDate(picked);
+              if (picked != null) widget.onDate(picked);
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
@@ -469,12 +510,12 @@ class _PersonForm extends StatelessWidget {
                       size: 16, color: AppColors.accent),
                   const SizedBox(width: 10),
                   Text(
-                    date == null
+                    widget.date == null
                         ? '생년월일 선택'
-                        : '${date!.year}년 ${date!.month}월 ${date!.day}일',
+                        : '${widget.date!.year}년 ${widget.date!.month}월 ${widget.date!.day}일',
                     style: AppTheme.sans(
                         size: 14,
-                        color: date == null
+                        color: widget.date == null
                             ? AppColors.mutedForeground
                             : AppColors.primary),
                   ),
@@ -487,12 +528,13 @@ class _PersonForm extends StatelessWidget {
             children: [
               Expanded(
                 child: Opacity(
-                  opacity: timeUnknown ? 0.4 : 1,
+                  opacity: widget.timeUnknown ? 0.4 : 1,
                   child: TextField(
-                    enabled: !timeUnknown,
+                    controller: _timeCtrl,
+                    enabled: !widget.timeUnknown,
                     decoration: _dec('출생시간 (예: 09:30)'),
                     keyboardType: TextInputType.datetime,
-                    onChanged: (v) => onTime(v.isEmpty ? null : v),
+                    onChanged: (v) => widget.onTime(v.isEmpty ? null : v),
                   ),
                 ),
               ),
@@ -502,9 +544,9 @@ class _PersonForm extends StatelessWidget {
           Row(
             children: [
               Checkbox(
-                value: timeUnknown,
+                value: widget.timeUnknown,
                 activeColor: AppColors.accent,
-                onChanged: (v) => onTimeUnknown(v ?? false),
+                onChanged: (v) => widget.onTimeUnknown(v ?? false),
               ),
               Text('출생시간 모름 (3주 6글자 기준 분석)',
                   style: AppTheme.sans(size: 13, color: AppColors.primary)),
@@ -512,7 +554,7 @@ class _PersonForm extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
-            initialValue: place,
+            initialValue: widget.place,
             decoration: _dec('출생지 (진태양시 -32분 등 경도 보정)'),
             items: birthPlaces
                 .map((p) => DropdownMenuItem(
@@ -520,7 +562,7 @@ class _PersonForm extends StatelessWidget {
                       child: Text(p.name, style: AppTheme.sans(size: 14)),
                     ))
                 .toList(),
-            onChanged: (v) => onPlace(v),
+            onChanged: (v) => widget.onPlace(v),
           ),
         ],
       ),
@@ -678,11 +720,15 @@ class _StepConfirm extends StatelessWidget {
             initialH: user.hourPillar ?? '',
             hourUnknown: user.birthTimeUnknown,
             onSave: (y, m, d, h) {
-              user.yearPillar = y;
-              user.monthPillar = m;
-              user.dayPillar = d;
-              user.dayMaster = d.isNotEmpty ? d[0] : '';
-              user.hourPillar = h.isEmpty ? null : h;
+              final recalc = SajuCalculator.recalculateWithManualPillars(
+                yearPillar: y,
+                monthPillar: m,
+                dayPillar: d,
+                hourPillar: h.isEmpty ? null : h,
+                gender: user.gender,
+                birthDate: user.birthDate,
+              );
+              user.applySaju(recalc);
               user.birthTimeUnknown = h.isEmpty;
               user.manualOverride = true;
               onChanged();
@@ -705,11 +751,15 @@ class _StepConfirm extends StatelessWidget {
               initialH: partner!.partnerHourPillar ?? '',
               hourUnknown: partner!.partnerBirthTimeUnknown,
               onSave: (y, m, d, h) {
-                partner!.partnerYearPillar = y;
-                partner!.partnerMonthPillar = m;
-                partner!.partnerDayPillar = d;
-                partner!.partnerDayMaster = d.isNotEmpty ? d[0] : '';
-                partner!.partnerHourPillar = h.isEmpty ? null : h;
+                final recalc = SajuCalculator.recalculateWithManualPillars(
+                  yearPillar: y,
+                  monthPillar: m,
+                  dayPillar: d,
+                  hourPillar: h.isEmpty ? null : h,
+                  gender: partner!.partnerGender,
+                  birthDate: partner!.partnerBirthDate,
+                );
+                partner!.applySaju(recalc);
                 partner!.partnerBirthTimeUnknown = h.isEmpty;
                 partner!.partnerManualOverride = true;
                 onChanged();
@@ -880,60 +930,93 @@ class _StepConfirm extends StatelessWidget {
     final mCtrl = TextEditingController(text: initialM);
     final dCtrl = TextEditingController(text: initialD);
     final hCtrl = TextEditingController(text: hourUnknown ? '' : initialH);
+    String? errorMsg;
 
     await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(label, style: AppTheme.serif(size: 16, weight: FontWeight.w700)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '한글 2글자 간지(예: 갑자, 병인, 무오)로 입력하세요.\n시간 미상이면 시주를 비워두세요.',
-                style: AppTheme.sans(size: 12, color: AppColors.mutedForeground),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: yCtrl,
-                decoration: const InputDecoration(labelText: '년주 (예: 경진)'),
-              ),
-              TextField(
-                controller: mCtrl,
-                decoration: const InputDecoration(labelText: '월주 (예: 무인)'),
-              ),
-              TextField(
-                controller: dCtrl,
-                decoration: const InputDecoration(labelText: '일주 (예: 갑오)'),
-              ),
-              TextField(
-                controller: hCtrl,
-                decoration: const InputDecoration(labelText: '시주 (선택, 비우면 시간 미상)'),
-              ),
-            ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(label,
+              style: AppTheme.serif(size: 16, weight: FontWeight.w700)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '60갑자에 존재하는 한글 2글자 간지(예: 갑자, 병인, 무오)로 입력하세요.\n시간 미상이면 시주를 비워두세요.',
+                  style: AppTheme.sans(
+                      size: 12, color: AppColors.mutedForeground),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: yCtrl,
+                  decoration: const InputDecoration(labelText: '년주 (예: 경진)'),
+                ),
+                TextField(
+                  controller: mCtrl,
+                  decoration: const InputDecoration(labelText: '월주 (예: 무인)'),
+                ),
+                TextField(
+                  controller: dCtrl,
+                  decoration: const InputDecoration(labelText: '일주 (예: 갑오)'),
+                ),
+                TextField(
+                  controller: hCtrl,
+                  decoration:
+                      const InputDecoration(labelText: '시주 (선택, 비우면 시간 미상)'),
+                ),
+                if (errorMsg != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    errorMsg!,
+                    style: AppTheme.sans(
+                        size: 12,
+                        weight: FontWeight.w600,
+                        color: Colors.redAccent),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final y = yCtrl.text.trim();
-              final m = mCtrl.text.trim();
-              final d = dCtrl.text.trim();
-              final h = hCtrl.text.trim();
-              if (y.length >= 2 && m.length >= 2 && d.length >= 2) {
-                onSave(y.substring(0, 2), m.substring(0, 2), d.substring(0, 2),
-                    h.length >= 2 ? h.substring(0, 2) : '');
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('취소'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final y = yCtrl.text.trim();
+                final m = mCtrl.text.trim();
+                final d = dCtrl.text.trim();
+                final h = hCtrl.text.trim();
+                if (!isValidGanzhiPillar(y)) {
+                  setDialogState(
+                      () => errorMsg = '년주("$y")가 유효한 60갑자 한글 2글자가 아닙니다.');
+                  return;
+                }
+                if (!isValidGanzhiPillar(m)) {
+                  setDialogState(
+                      () => errorMsg = '월주("$m")가 유효한 60갑자 한글 2글자가 아닙니다.');
+                  return;
+                }
+                if (!isValidGanzhiPillar(d)) {
+                  setDialogState(
+                      () => errorMsg = '일주("$d")가 유효한 60갑자 한글 2글자가 아닙니다.');
+                  return;
+                }
+                if (h.isNotEmpty && !isValidGanzhiPillar(h)) {
+                  setDialogState(() => errorMsg =
+                      '시주("$h")가 유효한 60갑자 한글 2글자가 아닙니다. (모르면 비워두세요)');
+                  return;
+                }
+                onSave(y, m, d, h);
                 Navigator.of(ctx).pop();
-              }
-            },
-            child: const Text('K04 확정 저장'),
-          ),
-        ],
+              },
+              child: const Text('K04 확정 저장'),
+            ),
+          ],
+        ),
       ),
     );
   }

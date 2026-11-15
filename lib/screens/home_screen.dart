@@ -436,7 +436,7 @@ class _TrustSection extends StatelessWidget {
   }
 }
 
-// ─────────────── 곧 공개 ───────────────
+// ─────────────── 마스터 엔진 지원 분석 주제 (LIVE) ───────────────
 class _ComingSoonSection extends StatelessWidget {
   const _ComingSoonSection();
   @override
@@ -450,13 +450,33 @@ class _ComingSoonSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('곧 공개 예정',
+              Text('마스터 엔진 심층 질문 주제',
                   style: AppTheme.serif(size: 17, weight: FontWeight.w700)),
               const SizedBox(width: 10),
-              const ComingSoonBadge(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'LIVE 탑재 완료',
+                  style: AppTheme.sans(
+                      size: 11,
+                      weight: FontWeight.w700,
+                      color: AppColors.accent,
+                      height: 1),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
+          Text(
+            'STEP 3 질문 입력창이나 리포트 하단의 [이어서 물어보기] 채팅에서 아래 주제들을 바로 물어보실 수 있습니다.',
+            style: AppTheme.sans(size: 12.5, color: AppColors.mutedForeground),
+          ),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -468,13 +488,14 @@ class _ComingSoonSection extends StatelessWidget {
                         color: AppColors.card,
                         borderRadius: BorderRadius.circular(AppRadius.chip),
                         border: Border.all(
-                            color: AppColors.muted, width: 1.2),
+                            color: AppColors.gold.withValues(alpha: 0.35),
+                            width: 1.2),
                       ),
                       child: Text(t,
                           style: AppTheme.sans(
                               size: 12.5,
-                              color: AppColors.mutedForeground,
-                              weight: FontWeight.w500,
+                              color: AppColors.primary,
+                              weight: FontWeight.w600,
                               height: 1)),
                     ))
                 .toList(),
