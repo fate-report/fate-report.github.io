@@ -2,6 +2,13 @@
 
 만세력 기준 AI 사주·궁합 리포트 서비스 (Flutter Web).
 
+## 🔗 링크
+
+- 🌍 **실제 앱 (바로 사용)** : **https://fate-report.pages.dev**
+- 📦 **소스 코드 (GitHub)** : https://github.com/jooyong0125-jpg/fate-report
+
+> 모바일 브라우저에서 바로 접속해 사용할 수 있습니다.
+
 ## 소개
 
 - **만세력 계산은 코드가, 해석만 AI가** 담당합니다. (AI가 명식·점수를 지어내지 못하도록 분리)
