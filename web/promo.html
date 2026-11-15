@@ -21,7 +21,7 @@
       background: radial-gradient(circle at 25% 15%, #1E192B 0%, #0B0910 75%);
       color: #F5EFE6;
       font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
-      min-height: 100vh;
+      
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -91,8 +91,8 @@
     }
     .canvas-wrap {
       position: relative;
-      width: 340px;
-      height: 604px;
+      width: 270px;
+      height: 480px;
       border-radius: 26px;
       padding: 7px;
       background: linear-gradient(145deg, rgba(223,190,111,0.45), rgba(197,155,56,0.12));
@@ -1491,6 +1491,11 @@ function startVideoRecording() {
 
     const blob = new Blob(recordedChunks, { type: selectedMime || 'video/webm' });
     const url = URL.createObjectURL(blob);
+    if (window.location.search.includes('autosave_server=1')) {
+      fetch('/save-video?ext=' + ext, { method: 'POST', body: blob })
+        .then(() => { document.title = 'VIDEO_SAVED_OK'; })
+        .catch(() => {});
+    }
 
     // Show manual fallback link as well
     manualDownloadLink.href = url;
@@ -1516,20 +1521,33 @@ function startVideoRecording() {
   btnRecord.textContent = '🔴 15.5초 영상 렌더링 중... (잠시만 기다려주세요)';
   statusText.textContent = '15.5초 고화질 녹화 중...';
   mediaRecorder.start(200);
+  const recTimer = setInterval(() => {
+    if (!isRecording) {
+      clearInterval(recTimer);
+      return;
+    }
+    tick(performance.now());
+  }, 33);
 }
 
 btnRecord.addEventListener('click', startVideoRecording);
 
-// Start loop once image is ready
-heroImg.onload = () => {
+// Start loop once image is ready (guarded against double-init)
+let initialized = false;
+function initStudio() {
+  if (initialized) return;
+  initialized = true;
   lastTimestamp = performance.now();
   requestAnimationFrame(tick);
   if (window.location.search.includes('autodownload=1')) {
-    setTimeout(startVideoRecording, 400);
+    setTimeout(startVideoRecording, 350);
   }
-};
+}
+heroImg.onload = initStudio;
 if (heroImg.complete) {
-  requestAnimationFrame(tick);
+  initStudio();
+} else {
+  setTimeout(initStudio, 300);
 }
 </script>
 </body>
