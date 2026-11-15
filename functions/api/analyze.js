@@ -50,10 +50,11 @@ export async function onRequestPost(context) {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: {
       responseMimeType: 'application/json',
-      temperature: 0.75,
-      maxOutputTokens: 2048,
-      // 2.5-flash의 내부 추론(thinking)을 꺼서 응답 속도를 크게 높인다.
-      thinkingConfig: { thinkingBudget: 0 },
+      temperature: 0.65,
+      maxOutputTokens: 4096,
+      // K01~K10 전수 대조 및 4인 JEV 하네스 릴레이 검증을 수행하면서도
+      // 응답 지연을 최소화하도록 경량 추론 예산(1024)을 할당한다.
+      thinkingConfig: { thinkingBudget: 1024 },
     },
     safetySettings: [
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
@@ -95,7 +96,10 @@ export async function onRequestPost(context) {
     return json({ error: 'parse', message: '응답 파싱 실패' }, 502);
   }
 
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  // thinking 토큰(thought: true)을 제외한 실제 출력 텍스트 파트 추출
+  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+  const textPart = parts.find((p) => !p.thought && typeof p.text === 'string') || parts[parts.length - 1];
+  const text = textPart?.text ?? '';
   if (!text) {
     return json({ error: 'empty', message: '빈 응답' }, 502);
   }

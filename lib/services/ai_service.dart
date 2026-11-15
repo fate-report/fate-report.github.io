@@ -27,8 +27,7 @@ class AiException implements Exception {
   }
 }
 
-/// AI 서비스 - generateAnalysis()가 진입점.
-/// 교체 지점은 _callModel 하나.
+/// AI 서비스 — K01~K10 마스터 엔진 & 4인 JEV 하네스 연동.
 class AiService {
   /// mock 스위치 (--dart-define=USE_MOCK=true). 기본 true.
   static const bool useMock =
@@ -41,17 +40,24 @@ class AiService {
   /// 일반 분석 생성 (기본/연애/반복패턴)
   static Future<AnalysisResult> generateAnalysis({
     required UserProfile user,
+    PartnerProfile? partner,
     required AnalysisCategory category,
     required String userQuestion,
   }) async {
     if (useMock || proxyUrl.isEmpty) {
-      await Future.delayed(const Duration(milliseconds: 900));
-      return MockData.general(user: user, category: category);
+      await Future.delayed(const Duration(milliseconds: 850));
+      return MockData.general(
+        user: user,
+        partner: partner,
+        category: category,
+        userQuestion: userQuestion,
+      );
     }
 
     final system = PromptBuilder.systemInstruction();
     final prompt = PromptBuilder.buildGeneral(
       user: user,
+      partner: partner,
       category: category,
       userQuestion: userQuestion,
     );
@@ -63,7 +69,7 @@ class AiService {
     }
   }
 
-  /// 궁합 분석 생성. 점수/신호등은 CompatEngine(코드)이 결정 → AI는 설명만.
+  /// 궁합 분석 생성. K07-R3 점수/신호등/수식근거는 CompatEngine(코드)이 100% 결정 → AI는 K09 입체 통변.
   static Future<CompatResult> generateCompatibility({
     required UserProfile user,
     required PartnerProfile partner,
@@ -71,8 +77,13 @@ class AiService {
     required String userQuestion,
   }) async {
     if (useMock || proxyUrl.isEmpty || !comp.compatibilityAvailable) {
-      await Future.delayed(const Duration(milliseconds: 900));
-      return MockData.compat(comp);
+      await Future.delayed(const Duration(milliseconds: 850));
+      return MockData.compat(
+        comp,
+        user: user,
+        partner: partner,
+        userQuestion: userQuestion,
+      );
     }
 
     final system = PromptBuilder.systemInstruction();
@@ -84,27 +95,76 @@ class AiService {
     );
     final json = await _callModel(system: system, prompt: prompt);
 
+    final defaultFooter =
+        '[적용 기준: K04, K06, K07-R3, K08, K09, K10 | 확신도: ${comp.hourIncluded ? 'HIGH(높음)' : 'MEDIUM(보통)'}]';
+
     return CompatResult(
       compatibilityAvailable: true,
-      compatibilityScore: comp.compatibilityScore, // 코드 값 우선
-      signalColor: comp.signalColor.name, // 코드 값 우선
+      compatibilityScore: comp.compatibilityScore, // 코드 값 우선 Lock
+      signalColor: comp.signalColor.name, // 코드 값 우선 Lock
       detailedScores: comp.detailedScores,
       maxScores: comp.maxScores,
+      itemFormulas: comp.itemFormulas,
+      briefingBody: (json['briefingBody'] ?? json['finalJudgment'] ?? '').toString(),
       goodParts: _strList(json['goodParts']),
       riskParts: _strList(json['riskParts']),
       finalJudgment: (json['finalJudgment'] ?? '').toString(),
       actionItems: _strList(json['actionItems']),
+      auditFooter: (json['auditFooter'] ?? defaultFooter).toString(),
       holdReason: null,
+      boundaryShiftNotice: comp.boundaryShiftNotice,
     );
   }
 
-  /// 실제 모델 호출 (프록시 서버 경유). 교체 지점은 여기 하나.
+  /// 꼬리 질문(후속 대화) 답변 생성 (0절 4항: 앞선 설명 반복 없이 핵심과 판단 근거에 집중)
+  static Future<ChatTurn> generateFollowUp({
+    required UserProfile user,
+    PartnerProfile? partner,
+    CompatComputation? comp,
+    required AnalysisCategory category,
+    required String initialBriefingSummary,
+    required List<ChatTurn> history,
+    required String followUpQuestion,
+  }) async {
+    if (useMock || proxyUrl.isEmpty) {
+      await Future.delayed(const Duration(milliseconds: 700));
+      return MockData.followUp(
+        user: user,
+        partner: partner,
+        comp: comp,
+        followUpQuestion: followUpQuestion,
+      );
+    }
+
+    final system = PromptBuilder.systemInstruction();
+    final prompt = PromptBuilder.buildFollowUp(
+      user: user,
+      partner: partner,
+      comp: comp,
+      category: category,
+      initialBriefingSummary: initialBriefingSummary,
+      history: history,
+      followUpQuestion: followUpQuestion,
+    );
+    final json = await _callModel(system: system, prompt: prompt);
+    final answer = (json['answer'] ?? json['briefingBody'] ?? '').toString();
+    final footer = (json['auditFooter'] ??
+            '[적용 기준: K04, K06, K09, K10 | 확신도: ${user.birthTimeUnknown ? 'MEDIUM(보통)' : 'HIGH(높음)'}]')
+        .toString();
+
+    return ChatTurn(
+      role: 'assistant',
+      text: answer,
+      auditFooter: footer,
+    );
+  }
+
+  /// 실제 모델 호출 (프록시 서버 경유).
   static Future<Map<String, dynamic>> _callModel({
     required String system,
     required String prompt,
   }) async {
     try {
-      // 상대경로(/api/analyze)면 현재 사이트 도메인 기준으로 절대경로화.
       final uri = proxyUrl.startsWith('http')
           ? Uri.parse(proxyUrl)
           : Uri.base.resolve(proxyUrl);
@@ -114,7 +174,7 @@ class AiService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'system': system, 'prompt': prompt}),
           )
-          .timeout(const Duration(seconds: 45));
+          .timeout(const Duration(seconds: 55));
 
       if (resp.statusCode == 429) {
         throw AiException(AiErrorType.rateLimit, '요청 과다');

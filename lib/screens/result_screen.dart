@@ -34,7 +34,13 @@ class _ResultScreenState extends State<ResultScreen> {
   AiException? _error;
   AnalysisResult? _general;
   CompatResult? _compat;
+  CompatComputation? _compatComp;
   final GlobalKey _captureKey = GlobalKey();
+
+  // 꼬리 질문(후속 대화) 상태
+  final List<ChatTurn> _chatHistory = [];
+  final TextEditingController _followUpCtrl = TextEditingController();
+  bool _chatLoading = false;
 
   bool get _isCompat => widget.category == AnalysisCategory.compatibility;
 
@@ -42,6 +48,12 @@ class _ResultScreenState extends State<ResultScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _run());
+  }
+
+  @override
+  void dispose() {
+    _followUpCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _run() async {
@@ -58,6 +70,7 @@ class _ResultScreenState extends State<ResultScreen> {
           partner: widget.partner!.toSaju(),
           calendarClear: calendarClear,
         );
+        _compatComp = comp;
         final result = await AiService.generateCompatibility(
           user: widget.user,
           partner: widget.partner!,
@@ -72,6 +85,7 @@ class _ResultScreenState extends State<ResultScreen> {
       } else {
         final result = await AiService.generateAnalysis(
           user: widget.user,
+          partner: widget.partner,
           category: widget.category,
           userQuestion: widget.userQuestion,
         );
@@ -92,6 +106,46 @@ class _ResultScreenState extends State<ResultScreen> {
       setState(() {
         _error = AiException(AiErrorType.unknown, e.toString());
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _askFollowUp(String rawQuestion) async {
+    final q = rawQuestion.trim();
+    if (q.isEmpty || _chatLoading) return;
+    _followUpCtrl.clear();
+
+    setState(() {
+      _chatHistory.add(ChatTurn(role: 'user', text: q));
+      _chatLoading = true;
+    });
+
+    try {
+      final summaryContext = _isCompat
+          ? (_compat?.finalJudgment ?? '')
+          : (_general?.resultSummary ?? '');
+      final reply = await AiService.generateFollowUp(
+        user: widget.user,
+        partner: widget.partner,
+        comp: _compatComp,
+        category: widget.category,
+        initialBriefingSummary: summaryContext,
+        history: _chatHistory.sublist(0, _chatHistory.length - 1),
+        followUpQuestion: q,
+      );
+      if (!mounted) return;
+      setState(() {
+        _chatHistory.add(reply);
+        _chatLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _chatHistory.add(const ChatTurn(
+          role: 'assistant',
+          text: '답변을 불러오는 중 일시적인 문제가 발생했어요. 다시 한 번 질문해 주세요.',
+        ));
+        _chatLoading = false;
       });
     }
   }
@@ -168,13 +222,15 @@ class _ResultScreenState extends State<ResultScreen> {
             child: _isCompat ? _compatCards() : _generalCards(),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         GradientButton(
           label: '결과 이미지로 저장 (공유용)',
           icon: Icons.download,
           gold: true,
           onPressed: _capture,
         ),
+        const SizedBox(height: 24),
+        _followUpSection(),
       ],
     );
   }
@@ -185,17 +241,21 @@ class _ResultScreenState extends State<ResultScreen> {
       children: [
         _keyResultCard(r.resultTitle, r.keyPoint, r.resultSummary),
         const SizedBox(height: 12),
-        _confidenceBadge(r.confidenceStatus),
-        const SizedBox(height: 12),
+        if (r.briefingBody.isNotEmpty) ...[
+          _masterBriefingCard('마스터 심층 브리핑', r.briefingBody),
+          const SizedBox(height: 12),
+        ],
         if (r.goodPoints.isNotEmpty)
-          _listCard('좋은 점', r.goodPoints, AppColors.goodBg,
+          _listCard('유리한 기회 · 강점 요인', r.goodPoints, AppColors.goodBg,
               AppColors.signalGreen, Icons.eco_outlined),
         if (r.goodPoints.isNotEmpty) const SizedBox(height: 12),
         if (r.riskPoints.isNotEmpty)
-          _listCard('조심할 점', r.riskPoints, AppColors.riskBg,
+          _listCard('주의할 리스크 요인', r.riskPoints, AppColors.riskBg,
               AppColors.gold, Icons.warning_amber_rounded),
         if (r.riskPoints.isNotEmpty) const SizedBox(height: 12),
         _actionCard(r.actionItems),
+        const SizedBox(height: 12),
+        _auditFooterCard(r.auditFooter, r.confidenceStatus),
         const SizedBox(height: 12),
         _noticeCard(r.warningMessage),
       ],
@@ -209,9 +269,15 @@ class _ResultScreenState extends State<ResultScreen> {
         children: [
           _holdCard(r.holdReason ?? '판정 보류'),
           const SizedBox(height: 12),
-          _keyResultCard('판정 보류', '지금은 확정하지 않았습니다', r.finalJudgment),
+          _keyResultCard('판정 보류 (K08)', '지금은 점수를 확정하지 않았습니다', r.finalJudgment),
           const SizedBox(height: 12),
+          if (r.briefingBody.isNotEmpty) ...[
+            _masterBriefingCard('판정 보류 안내', r.briefingBody),
+            const SizedBox(height: 12),
+          ],
           _actionCard(r.actionItems),
+          const SizedBox(height: 12),
+          _auditFooterCard(r.auditFooter, ConfidenceStatus.hold),
           const SizedBox(height: 12),
           _noticeCard(AppCopy.compatNotice),
         ],
@@ -223,20 +289,342 @@ class _ResultScreenState extends State<ResultScreen> {
         const SizedBox(height: 12),
         _detailScoresCard(r),
         const SizedBox(height: 12),
+        if (r.briefingBody.isNotEmpty) ...[
+          _masterBriefingCard('마스터 궁합 브리핑 (K07-R3 · K09)', r.briefingBody),
+          const SizedBox(height: 12),
+        ],
         if (r.goodParts.isNotEmpty)
-          _listCard('잘 맞는 부분', r.goodParts, AppColors.goodBg,
+          _listCard('잘 맞는 시너지 요인', r.goodParts, AppColors.goodBg,
               AppColors.signalGreen, Icons.favorite_outline),
         if (r.goodParts.isNotEmpty) const SizedBox(height: 12),
         if (r.riskParts.isNotEmpty)
-          _listCard('조심할 부분', r.riskParts, AppColors.riskBg,
+          _listCard('조심할 마찰 요인', r.riskParts, AppColors.riskBg,
               AppColors.gold, Icons.warning_amber_rounded),
         if (r.riskParts.isNotEmpty) const SizedBox(height: 12),
-        _keyResultCard('최종 판단', '', r.finalJudgment),
+        _keyResultCard('최종 관계 운영 방향', '', r.finalJudgment),
         const SizedBox(height: 12),
         _actionCard(r.actionItems),
         const SizedBox(height: 12),
+        _auditFooterCard(
+          r.auditFooter,
+          r.auditFooter.contains('HIGH')
+              ? ConfidenceStatus.ok
+              : ConfidenceStatus.partial,
+        ),
+        const SizedBox(height: 12),
         _noticeCard(AppCopy.compatNotice),
       ],
+    );
+  }
+
+  /// 0절 투트랙(카톡형 이야기체 문단 / 비교·궁합 굵은 소제목) 마스터 브리핑 카드
+  Widget _masterBriefingCard(String headerTitle, String bodyText) {
+    final paragraphs = bodyText
+        .split(RegExp(r'\n\s*\n'))
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+
+    return SoftCard(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.chat_bubble_outline_rounded,
+                  size: 18, color: AppColors.accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(headerTitle,
+                    style: GoogleFonts.notoSerifKr(
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    )),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...paragraphs.map((para) => Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: _renderParagraph(para),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _renderParagraph(String para) {
+    // [궁합 정량 요약: ...] 블록은 강조 박스로 렌더링
+    if (para.startsWith('[궁합 정량 요약')) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.muted.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.gold.withValues(alpha: 0.4)),
+        ),
+        child: Text(
+          para,
+          style: GoogleFonts.notoSansKr(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppColors.primary,
+            height: 1.55,
+          ),
+        ),
+      );
+    }
+
+    // **굵은 소제목**이 포함된 문단 처리
+    final lines = para.split('\n');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: lines.map((line) {
+        final trimmed = line.trim();
+        if (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length > 4) {
+          final cleanTitle = trimmed.replaceAll('**', '');
+          return Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
+            child: Text(
+              cleanTitle,
+              style: GoogleFonts.notoSerifKr(
+                fontSize: 15.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.accent,
+                height: 1.4,
+              ),
+            ),
+          );
+        }
+        final cleanLine = trimmed.replaceAll('**', '');
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: BodyText(cleanLine, size: 14.8),
+        );
+      }).toList(),
+    );
+  }
+
+  /// 하네스 4 종료 태그 배지 ([적용 기준: K04, K09... | 확신도: HIGH])
+  Widget _auditFooterCard(String footerText, ConfidenceStatus s) {
+    late Color color;
+    late IconData icon;
+    switch (s) {
+      case ConfidenceStatus.ok:
+        color = AppColors.signalGreen;
+        icon = Icons.verified_rounded;
+        break;
+      case ConfidenceStatus.partial:
+        color = AppColors.gold;
+        icon = Icons.fact_check_outlined;
+        break;
+      case ConfidenceStatus.hold:
+        color = AppColors.signalGray;
+        icon = Icons.help_outline_rounded;
+        break;
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(icon, size: 19, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              footerText,
+              style: GoogleFonts.notoSansKr(
+                fontSize: 12.8,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 하단 꼬리 질문(후속 대화) 섹션
+  Widget _followUpSection() {
+    final quickQuestions = _isCompat
+        ? [
+            '올해(2026)와 내년(2027) 우리 관계 흐름 비교해줘',
+            '명리적으로 왜 이 점수가 나왔는지 자세히 설명해줘',
+            '결론만 한 줄로 짧게 요약해줘',
+            '우리가 다툴 때 바로 화해하는 대화법 알려줘',
+          ]
+        : [
+            '올해(2026) vs 내년(2027) 흐름 비교해줘',
+            '명리적으로 내 사주 구조를 자세히 설명해줘',
+            '결론만 한 줄로 짧게 요약해줘',
+            '내 사주에 맞는 돈·재물 관리 전략 알려줘',
+          ];
+
+    return SoftCard(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.forum_outlined, size: 19, color: AppColors.gold),
+              const SizedBox(width: 8),
+              Text(
+                '이어서 물어보기 (꼬리 질문)',
+                style: GoogleFonts.notoSerifKr(
+                  fontSize: 16.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '확정된 명식(K04)을 바탕으로 앞선 설명 반복 없이 궁금한 점만 콕 집어 이어 답해드려요.',
+            style: AppTheme.sans(size: 12.5, color: AppColors.mutedForeground),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: quickQuestions.map((q) {
+              return InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => _askFollowUp(q),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.muted.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                        color: AppColors.gold.withValues(alpha: 0.35)),
+                  ),
+                  child: Text(
+                    q,
+                    style: AppTheme.sans(
+                      size: 12,
+                      weight: FontWeight.w600,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          if (_chatHistory.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 14),
+            ..._chatHistory.map((turn) {
+              final isUser = turn.role == 'user';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Align(
+                  alignment:
+                      isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 380),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isUser
+                          ? AppColors.accent.withValues(alpha: 0.12)
+                          : AppColors.muted.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          turn.text,
+                          style: GoogleFonts.notoSansKr(
+                            fontSize: 13.8,
+                            fontWeight:
+                                isUser ? FontWeight.w600 : FontWeight.w400,
+                            color: AppColors.primary,
+                            height: 1.55,
+                          ),
+                        ),
+                        if (turn.auditFooter != null &&
+                            turn.auditFooter!.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            turn.auditFooter!,
+                            style: GoogleFonts.notoSansKr(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.accent,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+          if (_chatLoading) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: 10),
+                Text('마스터 엔진이 K01~K10 기준으로 답변을 정리하고 있어요...',
+                    style: AppTheme.sans(
+                        size: 12, color: AppColors.mutedForeground)),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _followUpCtrl,
+                  onSubmitted: _askFollowUp,
+                  decoration: InputDecoration(
+                    hintText: '추가 질문을 입력하세요 (예: 올해 이직 운은 어때?)',
+                    hintStyle: AppTheme.sans(
+                        size: 13, color: AppColors.mutedForeground),
+                    filled: true,
+                    fillColor: AppColors.muted.withValues(alpha: 0.45),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: _chatLoading
+                    ? null
+                    : () => _askFollowUp(_followUpCtrl.text),
+                icon: const Icon(Icons.send_rounded, color: AppColors.accent),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -250,7 +638,7 @@ class _ResultScreenState extends State<ResultScreen> {
           const SizedBox(height: 14),
           Text(title,
               style: GoogleFonts.notoSerifKr(
-                fontSize: 23,
+                fontSize: 22,
                 fontWeight: FontWeight.w700,
                 color: AppColors.primary,
                 height: 1.4,
@@ -259,7 +647,7 @@ class _ResultScreenState extends State<ResultScreen> {
             const SizedBox(height: 12),
             Text(key,
                 style: GoogleFonts.notoSerifKr(
-                  fontSize: 16,
+                  fontSize: 15.5,
                   fontWeight: FontWeight.w600,
                   color: AppColors.gold,
                   height: 1.5,
@@ -267,50 +655,8 @@ class _ResultScreenState extends State<ResultScreen> {
           ],
           if (summary.isNotEmpty) ...[
             const SizedBox(height: 14),
-            BodyText(summary, size: 15),
+            BodyText(summary, size: 14.5),
           ],
-        ],
-      ),
-    );
-  }
-
-  Widget _confidenceBadge(ConfidenceStatus s) {
-    late String text;
-    late Color color;
-    late IconData icon;
-    switch (s) {
-      case ConfidenceStatus.ok:
-        text = '명식 신뢰도: 충분';
-        color = AppColors.signalGreen;
-        icon = Icons.verified_outlined;
-        break;
-      case ConfidenceStatus.partial:
-        text = '명식 신뢰도: 부분 (출생시간 일부 제외)';
-        color = AppColors.gold;
-        icon = Icons.info_outline;
-        break;
-      case ConfidenceStatus.hold:
-        text = '판정 보류: 정보 부족';
-        color = AppColors.signalGray;
-        icon = Icons.help_outline;
-        break;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 10),
-          Text(text,
-              style: GoogleFonts.notoSansKr(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primary,
-              )),
         ],
       ),
     );
@@ -351,12 +697,12 @@ class _ResultScreenState extends State<ResultScreen> {
                       child: Container(
                         width: 5,
                         height: 5,
-                        decoration:
-                            BoxDecoration(color: accent, shape: BoxShape.circle),
+                        decoration: BoxDecoration(
+                            color: accent, shape: BoxShape.circle),
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(child: BodyText(t, size: 14.5)),
+                    Expanded(child: BodyText(t, size: 14.2)),
                   ],
                 ),
               )),
@@ -375,7 +721,7 @@ class _ResultScreenState extends State<ResultScreen> {
               const Icon(Icons.check_circle_outline,
                   size: 18, color: AppColors.accent),
               const SizedBox(width: 8),
-              Text('지금 할 일',
+              Text('지금 바로 해볼 현실 전략',
                   style: GoogleFonts.notoSerifKr(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -405,7 +751,7 @@ class _ResultScreenState extends State<ResultScreen> {
                           )),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: BodyText(e.value, size: 14.5)),
+                    Expanded(child: BodyText(e.value, size: 14.2)),
                   ],
                 ),
               )),
@@ -459,10 +805,9 @@ class _ResultScreenState extends State<ResultScreen> {
                           color: AppColors.primary,
                           height: 1,
                         )),
-                    Text('/ 100',
+                    Text('/ 100 (K07-R3)',
                         style: GoogleFonts.notoSansKr(
-                            fontSize: 13,
-                            color: AppColors.mutedForeground)),
+                            fontSize: 12, color: AppColors.mutedForeground)),
                   ],
                 ),
               ],
@@ -500,9 +845,26 @@ class _ResultScreenState extends State<ResultScreen> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: BodyText(desc,
-                      size: 13, align: TextAlign.center,
+                      size: 13,
+                      align: TextAlign.center,
                       color: AppColors.mutedForeground),
                 ),
+                if (r.boundaryShiftNotice != null &&
+                    r.boundaryShiftNotice!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Text(
+                      r.boundaryShiftNotice!,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -516,7 +878,7 @@ class _ResultScreenState extends State<ResultScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('세부 점수',
+          Text('K07-R3 항목별 정량 채점표',
               style: GoogleFonts.notoSerifKr(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -524,26 +886,35 @@ class _ResultScreenState extends State<ResultScreen> {
               )),
           const SizedBox(height: 16),
           ...r.detailedScores.entries.map((e) {
+            final isHour = e.key == '시주 보정';
             final max = r.maxScores[e.key] ?? 1;
-            final ratio = e.value / max;
+            final ratio = isHour
+                ? ((e.value + 5) / 10.0).clamp(0.0, 1.0)
+                : (e.value / max).clamp(0.0, 1.0);
+            final scoreText = isHour
+                ? '${e.value > 0 ? '+${e.value}' : e.value} (-5~+5)'
+                : '${e.value} / $max';
+            final formula = r.itemFormulas[e.key] ?? '';
+
             return Padding(
-              padding: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.only(bottom: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(_scoreLabel(e.key),
+                      Text(e.key,
                           style: GoogleFonts.notoSansKr(
                             fontSize: 13.5,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                             color: AppColors.primary,
                           )),
-                      Text('${e.value} / $max',
+                      Text(scoreText,
                           style: GoogleFonts.notoSansKr(
                             fontSize: 13,
-                            color: AppColors.mutedForeground,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.accent,
                           )),
                     ],
                   ),
@@ -557,12 +928,23 @@ class _ResultScreenState extends State<ResultScreen> {
                       valueColor: AlwaysStoppedAnimation(
                         ratio >= 0.7
                             ? AppColors.signalGreen
-                            : ratio >= 0.4
+                            : ratio >= 0.45
                                 ? AppColors.gold
                                 : AppColors.signalRed,
                       ),
                     ),
                   ),
+                  if (formula.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      formula,
+                      style: GoogleFonts.notoSansKr(
+                        fontSize: 11.8,
+                        color: AppColors.mutedForeground,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             );
@@ -586,7 +968,7 @@ class _ResultScreenState extends State<ResultScreen> {
           const Icon(Icons.pause_circle_outline,
               size: 40, color: AppColors.signalGray),
           const SizedBox(height: 12),
-          Text('궁합 판정 보류',
+          Text('궁합 판정 보류 (K08)',
               style: GoogleFonts.notoSerifKr(
                 fontSize: 19,
                 fontWeight: FontWeight.w700,
@@ -618,11 +1000,11 @@ class _ResultScreenState extends State<ResultScreen> {
   String _signalLabel(String c) {
     switch (c) {
       case 'green':
-        return '초록불 · 잘 맞는 편';
+        return '초록불 (80~100점) · 안정적 조화';
       case 'yellow':
-        return '노란불 · 관리가 필요';
+        return '노란불 (50~79점) · 조율과 관리 필요';
       case 'red':
-        return '빨간불 · 노력이 필요';
+        return '빨간불 (0~49점) · 세심한 배려 필요';
       default:
         return '판정 보류';
     }
@@ -638,23 +1020,6 @@ class _ResultScreenState extends State<ResultScreen> {
         return AppCopy.signalRedDesc;
       default:
         return AppCopy.signalGrayDesc;
-    }
-  }
-
-  String _scoreLabel(String key) {
-    switch (key) {
-      case '정보신뢰도':
-        return '명식 정보 신뢰도';
-      case '핵심자리':
-        return '핵심 자리 궁합';
-      case '오행보완':
-        return '오행 보완성';
-      case '충형해':
-        return '충·형·해 리스크';
-      case '현실안정':
-        return '현실 안정성';
-      default:
-        return key;
     }
   }
 
@@ -694,7 +1059,7 @@ class _LoadingView extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(
+            const SizedBox(
               width: 44,
               height: 44,
               child: CircularProgressIndicator(
@@ -710,8 +1075,10 @@ class _LoadingView extends StatelessWidget {
                   color: AppColors.primary,
                 )),
             const SizedBox(height: 8),
-            BodyText('잠시만 기다려주세요.',
-                size: 13.5, color: AppColors.mutedForeground),
+            BodyText('K01~K10 마스터 엔진과 4인 하네스가 명식을 정밀 검산 중입니다...',
+                size: 13.5,
+                align: TextAlign.center,
+                color: AppColors.mutedForeground),
           ],
         ),
       ),
