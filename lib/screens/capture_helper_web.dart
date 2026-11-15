@@ -13,3 +13,7 @@ Future<void> savePngImpl(List<int> bytes, String fileName) async {
   anchor.click();
   anchor.remove();
 }
+
+void openUrlImpl(String url) {
+  web.window.open(url, '_blank');
+}

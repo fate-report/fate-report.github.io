@@ -5,4 +5,6 @@ import 'capture_helper_stub.dart'
 class CaptureHelper {
   static Future<void> savePng(List<int> bytes, String fileName) =>
       savePngImpl(bytes, fileName);
+
+  static void openUrl(String url) => openUrlImpl(url);
 }

@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../widgets/common.dart';
 import '../services/app_state.dart';
 import 'input_screen.dart';
+import 'capture_helper.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -34,14 +35,16 @@ class HomeScreen extends StatelessWidget {
                         const SizedBox(height: 40),
                         const _FaqSection(),
                         const SizedBox(height: 28),
+                        const _PromoStudioBanner(),
+                        const SizedBox(height: 20),
                         _FooterNotice(),
                         const SizedBox(height: 20),
                         Center(
-                          child: Text('Fate Report',
+                          child: Text('Fate Report  ·  여백.zip',
                               style: AppTheme.serif(
                                   size: 14,
                                   color: AppColors.mutedForeground,
-                                  letterSpacing: 3)),
+                                  letterSpacing: 2.5)),
                         ),
                       ],
                     ),
@@ -557,6 +560,80 @@ class _FaqTileState extends State<_FaqTile> {
               alignment: Alignment.centerLeft,
               child: BodyText(widget.item.a,
                   size: 13.5, color: AppColors.mutedForeground),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PromoStudioBanner extends StatelessWidget {
+  const _PromoStudioBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => CaptureHelper.openUrl('promo.html'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF261E1A), Color(0xFF181310)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppColors.gold.withValues(alpha: 0.45),
+            width: 1.2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.gold.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.play_circle_fill_rounded,
+                color: AppColors.gold,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '여백.zip × FATE REPORT',
+                    style: AppTheme.sans(
+                      size: 11,
+                      weight: FontWeight.w700,
+                      color: AppColors.gold,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '30초 인스타 감성 앱 시연 필름 · 영상 스튜디오 열기',
+                    style: AppTheme.serif(
+                      size: 14.5,
+                      weight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.open_in_new_rounded,
+              color: AppColors.gold,
+              size: 18,
             ),
           ],
         ),
