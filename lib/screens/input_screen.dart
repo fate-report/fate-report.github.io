@@ -219,7 +219,7 @@ class _InputScreenState extends State<InputScreen> {
     final title = categoryList
         .firstWhere((c) => c.category == widget.category)
         .plainName;
-    final steps = ['기본정보', '명식확인', '질문'];
+    final steps = ['기본정보', '명식 확인', '질문'];
     return Scaffold(
       body: PageBackground(
         child: SafeArea(
@@ -230,38 +230,38 @@ class _InputScreenState extends State<InputScreen> {
                 children: [
                   _TopBar(title: title, onBack: _back),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(22, 4, 22, 0),
-                    child: Row(
-                      children: List.generate(steps.length, (i) {
-                        final active = i <= _step;
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 3),
-                            child: Column(
-                              children: [
-                                Container(
-                                  height: 4,
-                                  decoration: BoxDecoration(
-                                    color: active
-                                        ? AppColors.gold
-                                        : AppColors.muted,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
+                    padding: const EdgeInsets.fromLTRB(22, 6, 22, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: List.generate(steps.length, (i) {
+                            final active = i <= _step;
+                            return Expanded(
+                              child: Container(
+                                height: 3.5,
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 3),
+                                decoration: BoxDecoration(
+                                  color:
+                                      active ? AppColors.gold : AppColors.muted,
+                                  borderRadius: BorderRadius.circular(2),
                                 ),
-                                const SizedBox(height: 6),
-                                Text('${i + 1} / ${steps.length} · ${steps[i]}',
-                                    style: AppTheme.sans(
-                                        size: 10,
-                                        color: active
-                                            ? AppColors.accent
-                                            : AppColors.mutedForeground,
-                                        weight: FontWeight.w600,
-                                        height: 1)),
-                              ],
-                            ),
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${_step + 1} / ${steps.length} · ${steps[_step]}',
+                          style: AppTheme.sans(
+                            size: 12,
+                            weight: FontWeight.w500,
+                            color: AppColors.mutedForeground,
+                            height: 1,
                           ),
-                        );
-                      }),
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(
@@ -272,25 +272,37 @@ class _InputScreenState extends State<InputScreen> {
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: SoftOutlineButton(
-                              label: '이전', onPressed: _back),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 3,
-                          child: GradientButton(
-                            label: _step < 2 ? '다음' : '마스터 브리핑 받기',
-                            icon: _step < 2 ? null : Icons.auto_awesome,
-                            gold: _step == 2,
-                            onPressed: _canProceed ? _next : null,
+                    child: _step == 0
+                        ? Opacity(
+                            opacity: _canProceed ? 1.0 : 0.45,
+                            child: GradientButton(
+                              label: '명식 계산하기',
+                              icon: Icons.auto_awesome,
+                              gold: false,
+                              onPressed: _canProceed ? _next : null,
+                            ),
+                          )
+                        : Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: SoftOutlineButton(
+                                    label: '이전', onPressed: _back),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                flex: 4,
+                                child: GradientButton(
+                                  label: _step == 1
+                                      ? '맞아요, 다음으로'
+                                      : '리포트 받기',
+                                  icon: _step == 2 ? Icons.auto_awesome : null,
+                                  gold: false,
+                                  onPressed: _canProceed ? _next : null,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),
@@ -383,11 +395,12 @@ class _StepBasicInfo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(
-            eyebrow: 'STEP 1', title: '기본 정보를 입력해주세요'),
-        const SizedBox(height: 16),
+        Text('나의 명식 정보',
+            style: AppTheme.serif(
+                size: 20, weight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 14),
         _PersonForm(
-          label: '나',
+          label: '',
           name: user.userName,
           gender: user.gender,
           date: user.birthDate,
@@ -395,6 +408,7 @@ class _StepBasicInfo extends StatelessWidget {
           time: user.birthTime,
           timeUnknown: user.birthTimeUnknown,
           place: user.birthPlace,
+          applyLocalTime: user.applyLocalTime,
           onName: (v) {
             user.userName = v;
             onChanged();
@@ -433,16 +447,24 @@ class _StepBasicInfo extends StatelessWidget {
             user.manualOverride = false;
             onChanged();
           },
+          onApplyLocalTime: (v) {
+            user.applyLocalTime = v;
+            user.manualOverride = false;
+            onChanged();
+          },
         ),
         if (showPartnerToggle) ...[
           const SizedBox(height: 16),
           SoftCard(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('상대방 정보 입력 여부',
-                    style: AppTheme.serif(size: 15, weight: FontWeight.w700)),
+                    style: AppTheme.sans(
+                        size: 13,
+                        weight: FontWeight.w700,
+                        color: AppColors.primary)),
                 const SizedBox(height: 10),
                 _Choice(
                   options: const {
@@ -458,7 +480,11 @@ class _StepBasicInfo extends StatelessWidget {
           ),
         ],
         if (showPartnerForm) ...[
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
+          Text('상대방 명식 정보',
+              style: AppTheme.serif(
+                  size: 20, weight: FontWeight.w700, color: AppColors.primary)),
+          const SizedBox(height: 14),
           _RelationSelector(
             value: partner!.relationStatus,
             onChanged: (v) {
@@ -468,7 +494,7 @@ class _StepBasicInfo extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _PersonForm(
-            label: '상대',
+            label: '',
             name: partner!.partnerName,
             gender: partner!.partnerGender,
             date: partner!.partnerBirthDate,
@@ -476,6 +502,7 @@ class _StepBasicInfo extends StatelessWidget {
             time: partner!.partnerBirthTime,
             timeUnknown: partner!.partnerBirthTimeUnknown,
             place: partner!.partnerBirthPlace,
+            applyLocalTime: partner!.partnerApplyLocalTime,
             onName: (v) {
               partner!.partnerName = v;
               onChanged();
@@ -517,6 +544,11 @@ class _StepBasicInfo extends StatelessWidget {
               partner!.partnerManualOverride = false;
               onChanged();
             },
+            onApplyLocalTime: (v) {
+              partner!.partnerApplyLocalTime = v;
+              partner!.partnerManualOverride = false;
+              onChanged();
+            },
           ),
         ],
       ],
@@ -533,6 +565,7 @@ class _PersonForm extends StatefulWidget {
   final String? time;
   final bool timeUnknown;
   final String? place;
+  final bool applyLocalTime;
   final ValueChanged<String> onName;
   final ValueChanged<String> onGender;
   final ValueChanged<DateTime> onDate;
@@ -540,6 +573,7 @@ class _PersonForm extends StatefulWidget {
   final ValueChanged<String?> onTime;
   final ValueChanged<bool> onTimeUnknown;
   final ValueChanged<String?> onPlace;
+  final ValueChanged<bool> onApplyLocalTime;
 
   const _PersonForm({
     required this.label,
@@ -550,6 +584,7 @@ class _PersonForm extends StatefulWidget {
     required this.time,
     required this.timeUnknown,
     required this.place,
+    required this.applyLocalTime,
     required this.onName,
     required this.onGender,
     required this.onDate,
@@ -557,6 +592,7 @@ class _PersonForm extends StatefulWidget {
     required this.onTime,
     required this.onTimeUnknown,
     required this.onPlace,
+    required this.onApplyLocalTime,
   });
 
   @override
@@ -755,6 +791,16 @@ class _PersonFormState extends State<_PersonForm> {
     );
   }
 
+  Widget _fieldLabel(String text) => Text(
+        text,
+        style: AppTheme.sans(
+          size: 13,
+          weight: FontWeight.w700,
+          color: AppColors.primary,
+          height: 1.2,
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     final isLunar =
@@ -764,7 +810,7 @@ class _PersonFormState extends State<_PersonForm> {
       widget.timeUnknown,
     );
 
-    String dateLabel = '생년월일 선택';
+    String dateLabel = '생년월일을 선택하세요';
     if (widget.date != null) {
       final d = widget.date!;
       final calTag = switch (widget.calendar) {
@@ -776,31 +822,65 @@ class _PersonFormState extends State<_PersonForm> {
     }
 
     return SoftCard(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(widget.label,
-              style: AppTheme.serif(size: 16, weight: FontWeight.w700)),
-          const SizedBox(height: 14),
+          if (widget.label.isNotEmpty) ...[
+            Text(widget.label,
+                style: AppTheme.serif(size: 16, weight: FontWeight.w700)),
+            const SizedBox(height: 14),
+          ],
+          _fieldLabel('이름 / 닉네임'),
+          const SizedBox(height: 8),
           TextField(
             controller: _nameCtrl,
-            decoration: _dec('이름 / 닉네임 (예: 지민)'),
+            decoration: _dec('예: 홍길동'),
             onChanged: widget.onName,
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _Choice(
-                  options: const {'female': '여성', 'male': '남성'},
-                  value: widget.gender,
-                  onChanged: widget.onGender,
-                ),
-              ),
-            ],
+          const SizedBox(height: 16),
+          _fieldLabel('성별'),
+          const SizedBox(height: 8),
+          _Choice(
+            options: const {'male': '남성', 'female': '여성'},
+            value: widget.gender,
+            onChanged: widget.onGender,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          _fieldLabel('생년월일'),
+          const SizedBox(height: 8),
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _showManseryeokDatePicker(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+              decoration: BoxDecoration(
+                color: AppColors.muted,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_today_outlined,
+                      size: 18, color: AppColors.gold),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      dateLabel,
+                      style: AppTheme.sans(
+                          size: 14,
+                          color: widget.date == null
+                              ? AppColors.mutedForeground
+                              : AppColors.primary,
+                          height: 1.2),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _fieldLabel('양력 / 음력'),
+          const SizedBox(height: 8),
           _Choice(
             options: const {
               'solar': '양력',
@@ -812,62 +892,34 @@ class _PersonFormState extends State<_PersonForm> {
           ),
           if (isLunar) ...[
             const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.gold.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '※ 한국천문연구원 표준 만세력 기준으로 음력(평달·윤달 및 음력 2월 29·30일 대월 포함)을 양력으로 정밀 변환하여 계산합니다.',
-                style: AppTheme.sans(size: 11.5, color: AppColors.primary),
+            Text(
+              '※ 한국천문연구원 표준 만세력 기준으로 음력(평달·윤달)을 양력으로 정밀 변환합니다.',
+              style: AppTheme.sans(
+                size: 11.5,
+                color: AppColors.mutedForeground,
+                height: 1.4,
               ),
             ),
           ],
-          const SizedBox(height: 12),
-          InkWell(
-            onTap: () => _showManseryeokDatePicker(context),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-              decoration: BoxDecoration(
-                color: AppColors.muted.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calendar_today,
-                      size: 16, color: AppColors.accent),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      dateLabel,
-                      style: AppTheme.sans(
-                          size: 14,
-                          color: widget.date == null
-                              ? AppColors.mutedForeground
-                              : AppColors.primary),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Opacity(
-                  opacity: widget.timeUnknown ? 0.4 : 1,
-                  child: TextField(
-                    controller: _timeCtrl,
-                    enabled: !widget.timeUnknown,
-                    decoration: _dec('출생시간 (예: 09:30 또는 0930)'),
-                    keyboardType: TextInputType.datetime,
-                    onChanged: (v) => widget.onTime(v.isEmpty ? null : v),
-                  ),
+          const SizedBox(height: 16),
+          _fieldLabel('출생시간'),
+          const SizedBox(height: 8),
+          Opacity(
+            opacity: widget.timeUnknown ? 0.45 : 1,
+            child: TextField(
+              controller: _timeCtrl,
+              enabled: !widget.timeUnknown,
+              decoration: _dec(
+                '출생시간 입력 (예: 09:30 또는 1430)',
+                prefixIcon: const Icon(
+                  Icons.access_time_outlined,
+                  size: 18,
+                  color: AppColors.gold,
                 ),
               ),
-            ],
+              keyboardType: TextInputType.datetime,
+              onChanged: (v) => widget.onTime(v.isEmpty ? null : v),
+            ),
           ),
           if (invalidTime) ...[
             const SizedBox(height: 6),
@@ -880,22 +932,41 @@ class _PersonFormState extends State<_PersonForm> {
               ),
             ),
           ],
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Checkbox(
-                value: widget.timeUnknown,
-                activeColor: AppColors.accent,
-                onChanged: (v) => widget.onTimeUnknown(v ?? false),
-              ),
-              Text('출생시간 모름 (3주 6글자 기준 분석)',
-                  style: AppTheme.sans(size: 13, color: AppColors.primary)),
-            ],
+          const SizedBox(height: 6),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => widget.onTimeUnknown(!widget.timeUnknown),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: widget.timeUnknown,
+                  activeColor: AppColors.gold,
+                  side: const BorderSide(
+                      color: AppColors.mutedForeground, width: 1.3),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4)),
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (v) => widget.onTimeUnknown(v ?? false),
+                ),
+                Expanded(
+                  child: Text('출생시간 모름 (3주 6글자 기준 분석)',
+                      style: AppTheme.sans(
+                          size: 12.5,
+                          color: AppColors.mutedForeground,
+                          height: 1.3)),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 12),
+          _fieldLabel('출생지역'),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
             initialValue: widget.place,
-            decoration: _dec('출생지 (진태양시 -32분 등 경도 보정)'),
+            hint: Text('출생지역 선택',
+                style: AppTheme.sans(
+                    size: 13.5, color: AppColors.mutedForeground)),
+            decoration: _dec('출생지역 선택'),
             items: birthPlaces
                 .map((p) => DropdownMenuItem(
                       value: p.name,
@@ -904,17 +975,44 @@ class _PersonFormState extends State<_PersonForm> {
                 .toList(),
             onChanged: (v) => widget.onPlace(v),
           ),
+          const SizedBox(height: 8),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => widget.onApplyLocalTime(!widget.applyLocalTime),
+            child: Row(
+              children: [
+                Checkbox(
+                  value: widget.applyLocalTime,
+                  activeColor: AppColors.gold,
+                  side: const BorderSide(
+                      color: AppColors.mutedForeground, width: 1.3),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4)),
+                  visualDensity: VisualDensity.compact,
+                  onChanged: (v) => widget.onApplyLocalTime(v ?? true),
+                ),
+                Expanded(
+                  child: Text('지역시(진태양시) 보정 적용',
+                      style: AppTheme.sans(
+                          size: 12.5,
+                          color: AppColors.mutedForeground,
+                          height: 1.3)),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  InputDecoration _dec(String hint) => InputDecoration(
+  InputDecoration _dec(String hint, {Widget? prefixIcon}) => InputDecoration(
         hintText: hint,
         hintStyle:
             AppTheme.sans(size: 13.5, color: AppColors.mutedForeground),
+        prefixIcon: prefixIcon,
         filled: true,
-        fillColor: AppColors.muted.withValues(alpha: 0.5),
+        fillColor: AppColors.muted,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -932,36 +1030,27 @@ class _Choice extends StatelessWidget {
       {required this.options, required this.value, required this.onChanged});
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
       children: options.entries.map((e) {
         final active = e.key == value;
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: InkWell(
+        return InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => onChanged(e.key),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+            decoration: BoxDecoration(
+              color: active ? AppColors.primary : AppColors.muted,
               borderRadius: BorderRadius.circular(12),
-              onTap: () => onChanged(e.key),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: active
-                      ? AppColors.accent.withValues(alpha: 0.12)
-                      : AppColors.muted.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: active ? AppColors.accent : Colors.transparent,
-                    width: 1.2,
-                  ),
-                ),
-                child: Text(e.value,
-                    style: AppTheme.sans(
-                        size: 13,
-                        weight: FontWeight.w600,
-                        color: active
-                            ? AppColors.accent
-                            : AppColors.mutedForeground,
-                        height: 1)),
+            ),
+            child: Text(
+              e.value,
+              style: AppTheme.sans(
+                size: 13.5,
+                weight: active ? FontWeight.w600 : FontWeight.w500,
+                color: active ? Colors.white : AppColors.mutedForeground,
+                height: 1,
               ),
             ),
           ),
@@ -1041,10 +1130,13 @@ class _StepConfirm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(
-          eyebrow: 'STEP 2 · K04 DATA LOCK',
-          title: '확정 명식을 확인하세요',
-          subtitle: '만세력 앱과 글자가 다르거나 경계 시간대라면 [글자 직접 수정]으로 고정할 수 있습니다.',
+        Text('이 값이 맞나요?',
+            style: AppTheme.serif(
+                size: 21, weight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 6),
+        Text(
+          '만세력으로 자동 계산된 명식입니다. 다르면 직접 수정할 수 있어요.',
+          style: AppTheme.sans(size: 13.5, color: AppColors.mutedForeground),
         ),
         const SizedBox(height: 16),
         _pillarCard(
@@ -1131,128 +1223,192 @@ class _StepConfirm extends StatelessWidget {
         .map((e) => '${e.key}${e.value}')
         .join(' · ');
 
-    return SoftCard(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final infoLines = <String>[
+      if (saju.hourUnknown) '출생시간을 몰라 시주는 계산에서 제외했습니다 (3주 6글자 기준 분석).',
+      ...saju.boundaryWarnings,
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SoftCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(title,
-                    style: AppTheme.serif(size: 16, weight: FontWeight.w700)),
-              ),
-              if (saju.dayMaster.isNotEmpty)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(title,
+                        style: AppTheme.serif(
+                            size: 16,
+                            weight: FontWeight.w700,
+                            color: AppColors.primary)),
                   ),
-                  child: Text(
-                      '일간 ${saju.dayMaster}(${stemElements[saju.dayMaster] ?? ""})',
-                      style: AppTheme.sans(
-                          size: 12,
-                          weight: FontWeight.w700,
-                          color: AppColors.accent,
-                          height: 1)),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: items.map((e) {
-              return Expanded(
-                child: Column(
-                  children: [
-                    Text(e.$1,
+                  TextButton.icon(
+                    onPressed: onEdit,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.edit_outlined,
+                        size: 15, color: AppColors.gold),
+                    label: Text('수정',
                         style: AppTheme.sans(
-                            size: 11,
-                            color: AppColors.mutedForeground,
+                            size: 13,
+                            weight: FontWeight.w600,
+                            color: AppColors.gold,
                             height: 1)),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: items.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final e = entry.value;
+                  final isDay = idx == 2;
+                  return Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 14, horizontal: 4),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: AppColors.muted.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(12),
+                        color: isDay ? AppColors.primary : AppColors.muted,
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       child: Column(
                         children: [
+                          Text(e.$1,
+                              style: AppTheme.sans(
+                                  size: 11,
+                                  color: isDay
+                                      ? Colors.white70
+                                      : AppColors.mutedForeground,
+                                  height: 1.1)),
+                          const SizedBox(height: 6),
                           Text(e.$2,
                               style: AppTheme.serif(
-                                  size: 18, weight: FontWeight.w700)),
+                                  size: 19,
+                                  weight: FontWeight.w700,
+                                  color: isDay
+                                      ? AppColors.goldLight
+                                      : AppColors.primary,
+                                  height: 1.2)),
                           if (e.$3.isNotEmpty) ...[
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 3),
                             Text(e.$3,
                                 style: AppTheme.sans(
                                     size: 11,
-                                    color: AppColors.mutedForeground)),
+                                    color: isDay
+                                        ? AppColors.goldLight
+                                            .withValues(alpha: 0.75)
+                                        : AppColors.mutedForeground,
+                                    height: 1.1)),
                           ],
                         ],
                       ),
                     ),
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-          Text('• 3주 6글자 본기 오행: $elDist',
-              style:
-                  AppTheme.sans(size: 12, color: AppColors.mutedForeground)),
-          if (saju.daeunSummary.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text('• 대운: ${saju.daeunSummary}',
-                style: AppTheme.sans(
-                    size: 11.5, color: AppColors.mutedForeground)),
-          ],
-          if (saju.hourUnknown) ...[
-            const SizedBox(height: 6),
-            Text('※ 출생시간 미상으로 시주는 제외하고 3주 6글자 기준으로 분석합니다.',
-                style: AppTheme.sans(
-                    size: 11.5, color: AppColors.mutedForeground)),
-          ],
-          if (saju.hasBoundaryWarning) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.gold.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(10),
+                  );
+                }).toList(),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: saju.boundaryWarnings
-                    .map((w) => Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(w,
-                              style: AppTheme.sans(
-                                  size: 11.5, color: AppColors.primary)),
-                        ))
-                    .toList(),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (saju.dayMaster.isNotEmpty)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('일간(나를 상징): ',
+                            style: AppTheme.sans(
+                                size: 13,
+                                color: AppColors.mutedForeground,
+                                height: 1.2)),
+                        Text(
+                          '${saju.dayMaster}(${stemElements[saju.dayMaster] ?? ""})',
+                          style: AppTheme.sans(
+                              size: 14,
+                              weight: FontWeight.w700,
+                              color: AppColors.gold,
+                              height: 1.2),
+                        ),
+                      ],
+                    ),
+                  if (saju.hourUnknown)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.muted,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text('시주 판정 보류',
+                          style: AppTheme.sans(
+                              size: 11,
+                              weight: FontWeight.w600,
+                              color: AppColors.mutedForeground,
+                              height: 1.1)),
+                    ),
+                ],
               ),
-            ),
-          ],
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_note, size: 17, color: AppColors.accent),
-              label: Text('만세력 글자 직접 수정',
+              const SizedBox(height: 8),
+              Text('• 3주 6글자 본기 오행: $elDist',
                   style: AppTheme.sans(
-                      size: 12.5,
-                      weight: FontWeight.w600,
-                      color: AppColors.accent)),
+                      size: 11.8, color: AppColors.mutedForeground)),
+              if (saju.daeunSummary.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text('• 대운: ${saju.daeunSummary}',
+                    style: AppTheme.sans(
+                        size: 11.8, color: AppColors.mutedForeground)),
+              ],
+            ],
+          ),
+        ),
+        if (infoLines.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.noticeBg,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Icon(Icons.info_outline,
+                      size: 17, color: AppColors.mutedForeground),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: infoLines
+                        .map((w) => Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(w,
+                                  style: AppTheme.sans(
+                                      size: 12,
+                                      color: AppColors.mutedForeground,
+                                      height: 1.45)),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 
@@ -1374,70 +1530,39 @@ class _StepQuestion extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(
-          eyebrow: 'STEP 3',
-          title: '무엇이 가장 궁금하신가요?',
-          subtitle: '질문 성격에 맞춰 카톡처럼 다정한 줄글 브리핑 또는 비교·궁합 브리핑으로 답해드려요.',
+        Text('무엇이 가장 궁금하신가요?',
+            style: AppTheme.serif(
+                size: 21, weight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 6),
+        Text(
+          '구체적으로 적을수록 질문에 꼭 맞춘 현실적인 답을 드릴 수 있어요. (선택)',
+          style: AppTheme.sans(size: 13.5, color: AppColors.mutedForeground),
         ),
         const SizedBox(height: 16),
         SoftCard(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.auto_awesome,
-                      size: 16, color: AppColors.gold),
-                  const SizedBox(width: 6),
-                  Text(
-                    '나의 핵심 질문 (자유롭게 적어주세요)',
-                    style: AppTheme.sans(
-                      size: 12.5,
-                      weight: FontWeight.w700,
-                      color: AppColors.accent,
-                    ),
-                  ),
-                ],
+          padding: const EdgeInsets.all(14),
+          child: TextField(
+            controller: controller,
+            maxLines: 5,
+            style: AppTheme.serif(
+              size: 16,
+              weight: FontWeight.w600,
+              color: AppColors.primary,
+              height: 1.55,
+            ),
+            decoration: InputDecoration(
+              hintText: '고민을 자유롭게 적어주세요.',
+              hintStyle: AppTheme.sans(
+                size: 14,
+                color: AppColors.mutedForeground,
+                height: 1.5,
               ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: controller,
-                maxLines: 5,
-                style: AppTheme.serif(
-                  size: 16.5,
-                  weight: FontWeight.w600,
-                  color: AppColors.primary,
-                  height: 1.55,
-                ),
-                decoration: InputDecoration(
-                  hintText:
-                      '고민을 자유롭게 적어주세요.\n(예: 그 사람이 왜 연락을 피할까요? 먼저 연락할까요? / 올해 10월에 이직해도 될까요?)',
-                  hintStyle: AppTheme.sans(
-                    size: 14,
-                    color: AppColors.mutedForeground,
-                    height: 1.5,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 8,
-                  ),
-                ),
-              ),
-            ],
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.all(6),
+            ),
           ),
         ),
-        const SizedBox(height: 16),
-        Text(
-          '💡 예시 질문을 터치하면 바로 입력됩니다',
-          style: AppTheme.sans(
-            size: 12.5,
-            weight: FontWeight.w700,
-            color: AppColors.accent,
-          ),
-        ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 14),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1447,20 +1572,19 @@ class _StepQuestion extends StatelessWidget {
               onTap: () => controller.text = ex,
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                 decoration: BoxDecoration(
-                  color: AppColors.card,
+                  color: AppColors.muted.withValues(alpha: 0.75),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                      color: AppColors.gold.withValues(alpha: 0.45),
-                      width: 1.2),
+                      color: AppColors.gold.withValues(alpha: 0.45), width: 1),
                 ),
                 child: Text(ex,
                     style: AppTheme.sans(
-                        size: 13.5,
+                        size: 13,
                         color: AppColors.primary,
-                        weight: FontWeight.w600,
-                        height: 1.35)),
+                        weight: FontWeight.w500,
+                        height: 1.3)),
               ),
             );
           }).toList(),

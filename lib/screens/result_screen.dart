@@ -248,37 +248,23 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
+  String _stripBoldMarkers(String s) => s.replaceAll('**', '').trim();
+
   Widget _userQuestionBanner({String? directAnswer}) {
     final q = widget.userQuestion.trim();
     if (q.isEmpty) return const SizedBox.shrink();
-    final ans = (directAnswer ?? '').trim().replaceAll('**', '');
+    final ans = _stripBoldMarkers(directAnswer ?? '');
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: AppColors.gold.withValues(alpha: 0.55),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.gold.withValues(alpha: 0.08),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
+      child: SoftCard(
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.gold.withValues(alpha: 0.16),
+                color: AppColors.muted,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
@@ -294,7 +280,7 @@ class _ResultScreenState extends State<ResultScreen> {
             Text(
               '“$q”',
               style: GoogleFonts.notoSerifKr(
-                fontSize: 17.5,
+                fontSize: 16.5,
                 fontWeight: FontWeight.w700,
                 color: AppColors.primary,
                 height: 1.48,
@@ -306,7 +292,7 @@ class _ResultScreenState extends State<ResultScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.13),
+                  color: AppColors.muted.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -315,7 +301,7 @@ class _ResultScreenState extends State<ResultScreen> {
                     Text(
                       'A.',
                       style: GoogleFonts.notoSerifKr(
-                        fontSize: 16,
+                        fontSize: 15.5,
                         fontWeight: FontWeight.w700,
                         color: AppColors.accent,
                       ),
@@ -325,7 +311,7 @@ class _ResultScreenState extends State<ResultScreen> {
                       child: Text(
                         ans,
                         style: GoogleFonts.notoSerifKr(
-                          fontSize: 15.2,
+                          fontSize: 14.8,
                           fontWeight: FontWeight.w700,
                           color: AppColors.primary,
                           height: 1.48,
@@ -653,41 +639,44 @@ class _ResultScreenState extends State<ResultScreen> {
 
   /// 하네스 4 종료 태그 배지 ([적용 기준: K04, K09... | 확신도: HIGH])
   Widget _auditFooterCard(String footerText, ConfidenceStatus s) {
-    late Color color;
+    late Color bg;
+    late Color iconColor;
     late IconData icon;
     switch (s) {
       case ConfidenceStatus.ok:
-        color = AppColors.signalGreen;
-        icon = Icons.verified_rounded;
+        bg = AppColors.goodBg;
+        iconColor = AppColors.signalGreen;
+        icon = Icons.verified_outlined;
         break;
       case ConfidenceStatus.partial:
-        color = AppColors.gold;
-        icon = Icons.fact_check_outlined;
+        bg = AppColors.riskBg;
+        iconColor = AppColors.gold;
+        icon = Icons.info_outline;
         break;
       case ConfidenceStatus.hold:
-        color = AppColors.signalGray;
-        icon = Icons.help_outline_rounded;
+        bg = AppColors.noticeBg;
+        iconColor = AppColors.signalGray;
+        icon = Icons.info_outline;
         break;
     }
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, size: 19, color: color),
+          Icon(icon, size: 18, color: iconColor),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               footerText,
               style: GoogleFonts.notoSansKr(
-                fontSize: 12.8,
-                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
                 color: AppColors.primary,
                 height: 1.35,
               ),
@@ -877,6 +866,8 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Widget _keyResultCard(String title, String key, String summary) {
+    final cleanTitle = _stripBoldMarkers(title);
+    final cleanKey = _stripBoldMarkers(key);
     return SoftCard(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -884,16 +875,16 @@ class _ResultScreenState extends State<ResultScreen> {
         children: [
           const GoldHairline(width: 32),
           const SizedBox(height: 14),
-          Text(title,
+          Text(cleanTitle,
               style: GoogleFonts.notoSerifKr(
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
                 color: AppColors.primary,
                 height: 1.4,
               )),
-          if (key.isNotEmpty) ...[
+          if (cleanKey.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(key,
+            Text(cleanKey,
                 style: GoogleFonts.notoSerifKr(
                   fontSize: 15.5,
                   fontWeight: FontWeight.w600,
@@ -901,9 +892,9 @@ class _ResultScreenState extends State<ResultScreen> {
                   height: 1.5,
                 )),
           ],
-          if (summary.isNotEmpty) ...[
+          if (summary.trim().isNotEmpty) ...[
             const SizedBox(height: 14),
-            BodyText(summary, size: 14.5),
+            _buildHighlightedRichText(summary.trim(), fontSize: 14.5),
           ],
         ],
       ),
@@ -926,12 +917,14 @@ class _ResultScreenState extends State<ResultScreen> {
             children: [
               Icon(icon, size: 18, color: accent),
               const SizedBox(width: 8),
-              Text(title,
-                  style: GoogleFonts.notoSerifKr(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  )),
+              Expanded(
+                child: Text(_stripBoldMarkers(title),
+                    style: GoogleFonts.notoSerifKr(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    )),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -950,7 +943,8 @@ class _ResultScreenState extends State<ResultScreen> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(child: BodyText(t, size: 14.2)),
+                    Expanded(
+                        child: _buildHighlightedRichText(t, fontSize: 14.2)),
                   ],
                 ),
               )),
@@ -973,7 +967,7 @@ class _ResultScreenState extends State<ResultScreen> {
                   size: 18, color: AppColors.accent),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(title,
+                child: Text(_stripBoldMarkers(title),
                     style: GoogleFonts.notoSerifKr(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -1004,7 +998,9 @@ class _ResultScreenState extends State<ResultScreen> {
                           )),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: BodyText(e.value, size: 14.2)),
+                    Expanded(
+                        child:
+                            _buildHighlightedRichText(e.value, fontSize: 14.2)),
                   ],
                 ),
               )),
