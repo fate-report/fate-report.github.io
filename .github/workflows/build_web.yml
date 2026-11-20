@@ -66,8 +66,14 @@ jobs:
 
       - name: Build Flutter Web (GitHub Pages Mirror)
         run: |
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          case "$REPO_NAME" in
+            *.github.io) BASE_HREF="/" ;;
+            *) BASE_HREF="/${REPO_NAME}/" ;;
+          esac
+          echo "Building GitHub Pages with --base-href ${BASE_HREF}"
           flutter build web --release \
-            --base-href /fate-report/ \
+            --base-href "${BASE_HREF}" \
             --dart-define=USE_MOCK=false \
             --dart-define=AI_PROXY_URL=https://fate-report.pages.dev/api/analyze
 
