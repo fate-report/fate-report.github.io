@@ -1,19 +1,18 @@
-// Cloudflare Pages Function — AI 프록시 (앱 → 여기 → Gemini 자동 폴백 체인)
-// 앱에서 { system, prompt } 를 받아 최적의 무료 Gemini 모델 체인을 순회 호출하고
+// Cloudflare Pages Function — AI 프록시 (앱 → 여기 → Gemini / OpenRouter 백업)
+// 앱에서 { system, prompt } 를 받아 무료 최상위 Gemini 모델 체인
+// (Flash → Flash-Lite 자동 폴백 + 선택적 OpenRouter :free 2차 백업)으로 호출하고
 // 순수 JSON 결과만 돌려준다. API 키는 서버 환경변수(GEMINI_API_KEY)에만 존재.
 //
 // 경로: POST /api/analyze
 
-const GEMINI_FALLBACK_MODELS = [
+const DEFAULT_GEMINI_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
-  'gemini-3.5-flash-lite',
-  'gemini-3-flash-preview',
+  'gemini-3.1-flash-lite',
+  'gemini-3.8-flash',
 ];
 
-function geminiEndpoint(model) {
-  return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-}
+const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3-235b-a22b:free';
 
 const STEMS = ['갑', '을', '병', '정', '무', '기', '경', '신', '임', '계'];
 const STEMS_HANJA = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
@@ -49,11 +48,139 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-function json(obj, status = 200) {
+function json(obj, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS },
+    headers: { 'Content-Type': 'application/json', ...CORS, ...extraHeaders },
   });
+}
+
+function parseJsonSafely(text) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    let cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    }
+    try {
+      return JSON.parse(cleaned);
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+async function callGeminiModel({ model, apiKey, finalSystem, finalPrompt }) {
+  const endpoint =
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+  const generationConfig = {
+    responseMimeType: 'application/json',
+    temperature: 0.65,
+    maxOutputTokens: 8192,
+  };
+  if (model.startsWith('gemini-2.5-')) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
+
+  const geminiBody = {
+    system_instruction: { parts: [{ text: finalSystem }] },
+    contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
+    generationConfig,
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+    ],
+  };
+
+  let resp;
+  try {
+    resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify(geminiBody),
+    });
+  } catch (_) {
+    return { ok: false, status: 502, reason: 'network' };
+  }
+
+  if (!resp.ok) {
+    const detail = (await resp.text()).slice(0, 250);
+    return { ok: false, status: resp.status, reason: `http_${resp.status}`, detail };
+  }
+
+  let data;
+  try {
+    data = await resp.json();
+  } catch (_) {
+    return { ok: false, status: 502, reason: 'response_json_error' };
+  }
+
+  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+  const textPart =
+    parts.find((p) => !p.thought && typeof p.text === 'string') ||
+    parts[parts.length - 1];
+  const text = textPart?.text ?? '';
+  const parsed = parseJsonSafely(text);
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, status: 502, reason: 'parse_error', detail: text.slice(0, 200) };
+  }
+
+  return { ok: true, status: 200, model, parsed };
+}
+
+async function callOpenRouterFallback({ apiKey, model, finalSystem, finalPrompt }) {
+  let resp;
+  try {
+    resp = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://fate-report.github.io/',
+        'X-Title': 'Fate Report',
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.65,
+        max_tokens: 4096,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: finalSystem },
+          { role: 'user', content: finalPrompt },
+        ],
+      }),
+    });
+  } catch (_) {
+    return { ok: false, status: 502, reason: 'openrouter_network' };
+  }
+
+  if (!resp.ok) {
+    return { ok: false, status: resp.status, reason: `openrouter_${resp.status}` };
+  }
+
+  let data;
+  try {
+    data = await resp.json();
+  } catch (_) {
+    return { ok: false, status: 502, reason: 'openrouter_json_error' };
+  }
+
+  const text = data?.choices?.[0]?.message?.content ?? '';
+  const parsed = parseJsonSafely(text);
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, status: 502, reason: 'openrouter_parse_error' };
+  }
+  return { ok: true, status: 200, model: `openrouter:${model}`, parsed };
 }
 
 export async function onRequestOptions() {
@@ -63,9 +190,10 @@ export async function onRequestOptions() {
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const apiKey = env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return json({ error: 'server_misconfigured', message: 'GEMINI_API_KEY 없음' }, 500);
+  const geminiKey = env.GEMINI_API_KEY;
+  const openRouterKey = env.OPENROUTER_API_KEY;
+  if (!geminiKey && !openRouterKey) {
+    return json({ error: 'server_misconfigured', message: 'API 키(GEMINI_API_KEY) 없음' }, 500);
   }
 
   let body;
@@ -88,106 +216,58 @@ export async function onRequestPost(context) {
     ? prompt
     : `${timeAnchor}\n\n${prompt}`;
 
-  function buildGeminiPayload(useThinking) {
-    const genCfg = {
-      responseMimeType: 'application/json',
-      temperature: 0.65,
-      maxOutputTokens: 8192,
-    };
-    if (useThinking) {
-      // K01~K10 전수 대조 및 4인 JEV 하네스 릴레이 검증을 수행하면서도
-      // 응답 지연을 최소화하도록 추론 예산(1024)을 할당한다.
-      genCfg.thinkingConfig = { thinkingBudget: 1024 };
-    }
-    return {
-      system_instruction: { parts: [{ text: finalSystem }] },
-      contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
-      generationConfig: genCfg,
-      safetySettings: [
-        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-      ],
-    };
-  }
+  const modelList = env.GEMINI_MODELS
+    ? env.GEMINI_MODELS.split(',').map((m) => m.trim()).filter(Boolean)
+    : DEFAULT_GEMINI_MODELS;
 
-  let resp = null;
-  let lastStatus = 502;
-  let lastDetail = '';
+  let sawRateLimit = false;
+  let sawCreditError = false;
+  let lastError = null;
 
-  for (const model of GEMINI_FALLBACK_MODELS) {
-    const supportsThinking = !model.includes('lite');
-    try {
-      resp = await fetch(geminiEndpoint(model), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify(buildGeminiPayload(supportsThinking)),
+  if (geminiKey) {
+    for (const model of modelList) {
+      const result = await callGeminiModel({
+        model,
+        apiKey: geminiKey,
+        finalSystem,
+        finalPrompt,
       });
-    } catch (_) {
-      lastStatus = 502;
-      continue;
+      if (result.ok) {
+        return json(result.parsed, 200, { 'X-Fate-Model': result.model });
+      }
+      if (result.status === 429) sawRateLimit = true;
+      if (result.status === 402 || result.status === 403) sawCreditError = true;
+      lastError = result;
     }
-
-    // 429(한도 초과) / 404(모델 지원 종료) / 503(일시 과부하) 시 다음 무료 모델로 자동 폴백
-    if (resp.status === 429 || resp.status === 404 || resp.status === 503 || resp.status === 500) {
-      lastStatus = resp.status;
-      lastDetail = await resp.text().catch(() => '');
-      resp = null;
-      continue;
-    }
-    break;
   }
 
-  if (!resp) {
-    if (lastStatus === 429) {
-      return json({ error: 'rate_limit', message: '무료 모델 전체 요청 한도 초과' }, 429);
+  if (openRouterKey) {
+    const orModel = (env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL).trim();
+    const fallback = await callOpenRouterFallback({
+      apiKey: openRouterKey,
+      model: orModel,
+      finalSystem,
+      finalPrompt,
+    });
+    if (fallback.ok) {
+      return json(fallback.parsed, 200, { 'X-Fate-Model': fallback.model });
     }
-    return json({ error: 'upstream', message: `Gemini ${lastStatus}`, detail: lastDetail.slice(0, 300) }, 502);
+    if (fallback.status === 429) sawRateLimit = true;
+    lastError = fallback;
   }
 
-  if (resp.status === 402 || resp.status === 403) {
+  if (sawRateLimit) {
+    return json({ error: 'rate_limit', message: '요청 과다 (모든 무료 모델 한도 도달)' }, 429);
+  }
+  if (sawCreditError) {
     return json({ error: 'credit', message: '크레딧/권한 문제' }, 402);
   }
-  if (!resp.ok) {
-    const t = await resp.text();
-    return json({ error: 'upstream', message: `Gemini ${resp.status}`, detail: t.slice(0, 300) }, 502);
-  }
-
-  let data;
-  try {
-    data = await resp.json();
-  } catch (_) {
-    return json({ error: 'parse', message: '응답 파싱 실패' }, 502);
-  }
-
-  // thinking 토큰(thought: true)을 제외한 실제 출력 텍스트 파트 추출
-  const parts = data?.candidates?.[0]?.content?.parts ?? [];
-  const textPart = parts.find((p) => !p.thought && typeof p.text === 'string') || parts[parts.length - 1];
-  const text = textPart?.text ?? '';
-  if (!text) {
-    return json({ error: 'empty', message: '빈 응답' }, 502);
-  }
-
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch (_) {
-    let cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const firstBrace = cleaned.indexOf('{');
-    const lastBrace = cleaned.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace > firstBrace) {
-      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
-    }
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (e2) {
-      return json({ error: 'parse', message: 'JSON 해석 실패', raw: text.slice(0, 300) }, 502);
-    }
-  }
-
-  return json(parsed, 200);
+  return json(
+    {
+      error: 'upstream',
+      message: lastError?.reason || 'AI 응답 실패',
+      detail: lastError?.detail || '',
+    },
+    502,
+  );
 }
