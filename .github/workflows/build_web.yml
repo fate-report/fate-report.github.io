@@ -1,0 +1,80 @@
+name: Build & Publish Fate Report Web
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build_and_publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.35.4'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run Flutter unit & widget tests
+        run: flutter test
+
+      - name: Build Flutter Web (Root / Cloudflare Pages)
+        run: |
+          flutter build web --release \
+            --base-href / \
+            --dart-define=USE_MOCK=false \
+            --dart-define=AI_PROXY_URL=/api/analyze
+
+      - name: Upload Cloudflare Web Artifact (build/web)
+        uses: actions/upload-artifact@v4
+        with:
+          name: fate-report-cloudflare-web
+          path: build/web
+
+      - name: Publish prebuilt Cloudflare bundle to cloudflare-dist branch
+        run: |
+          mkdir -p /tmp/cf_dist
+          cp -r build/web/* /tmp/cf_dist/
+          cp -r functions /tmp/cf_dist/functions
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan cloudflare-dist
+          git rm -rf .
+          cp -r /tmp/cf_dist/* .
+          git add -A
+          git commit -m "chore: build latest Fate Report web bundle for Cloudflare Pages"
+          git push origin cloudflare-dist --force
+          git checkout main
+
+      - name: Build Flutter Web (GitHub Pages Mirror)
+        run: |
+          flutter build web --release \
+            --base-href /fate-report/ \
+            --dart-define=USE_MOCK=false \
+            --dart-define=AI_PROXY_URL=https://fate-report.pages.dev/api/analyze
+
+      - name: Publish live mirror to gh-pages branch
+        run: |
+          mkdir -p /tmp/gh_dist
+          cp -r build/web/* /tmp/gh_dist/
+          git checkout --orphan gh-pages
+          git rm -rf .
+          cp -r /tmp/gh_dist/* .
+          git add -A
+          git commit -m "chore: deploy Fate Report web mirror to GitHub Pages"
+          git push origin gh-pages --force

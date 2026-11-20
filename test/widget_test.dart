@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import 'package:fate_report/main.dart';
 import 'package:fate_report/manseryeok/saju_calculator.dart';
@@ -122,8 +123,9 @@ void main() {
   });
 
   testWidgets('앱이 정상적으로 뜬다', (WidgetTester tester) async {
+    GoogleFonts.config.allowRuntimeFetching = false;
     await tester.pumpWidget(const FateReportApp());
     await tester.pump();
-    expect(find.text('Fate Report'), findsWidgets);
+    expect(find.text('FATE REPORT'), findsWidgets);
   });
 }
