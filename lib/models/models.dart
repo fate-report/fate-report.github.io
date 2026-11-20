@@ -231,11 +231,15 @@ class JevHarnessValidator {
 class AnalysisResult {
   final String resultTitle;
   final String resultSummary;
+  final String briefingTitle;
   final String briefingBody; // 0절 투트랙 다문단 브리핑 전문
   final ConfidenceStatus confidenceStatus;
   final String keyPoint;
+  final String goodTitle;
   final List<String> goodPoints;
+  final String riskTitle;
   final List<String> riskPoints;
+  final String actionTitle;
   final List<String> actionItems;
   final String auditFooter; // [적용 기준: K04, K09... | 확신도: HIGH(높음)]
   final String warningMessage;
@@ -244,11 +248,15 @@ class AnalysisResult {
   const AnalysisResult({
     required this.resultTitle,
     required this.resultSummary,
+    this.briefingTitle = '마스터 심층 브리핑',
     this.briefingBody = '',
     required this.confidenceStatus,
     required this.keyPoint,
+    this.goodTitle = '유리한 기회 · 강점 요인',
     required this.goodPoints,
+    this.riskTitle = '주의할 리스크 요인',
     required this.riskPoints,
+    this.actionTitle = '지금 바로 해볼 현실 전략',
     required this.actionItems,
     this.auditFooter = '[적용 기준: K04, K06, K09, K10 | 확신도: HIGH(높음)]',
     required this.warningMessage,
@@ -313,12 +321,24 @@ class AnalysisResult {
       resultTitle: JevHarnessValidator.sanitizeText(
         (j['resultTitle'] ?? '사주 심층 브리핑').toString(),
       ),
-      resultSummary: summary.isNotEmpty ? summary : body,
+      resultSummary: summary,
+      briefingTitle: JevHarnessValidator.sanitizeText(
+        (j['briefingTitle'] ?? '마스터 심층 브리핑').toString(),
+      ),
       briefingBody: body.isNotEmpty ? body : summary,
       confidenceStatus: enforcedConf,
       keyPoint: keyPt,
+      goodTitle: JevHarnessValidator.sanitizeText(
+        (j['goodTitle'] ?? '유리한 기회 · 강점 요인').toString(),
+      ),
       goodPoints: goods,
+      riskTitle: JevHarnessValidator.sanitizeText(
+        (j['riskTitle'] ?? '주의할 리스크 요인').toString(),
+      ),
       riskPoints: risks,
+      actionTitle: JevHarnessValidator.sanitizeText(
+        (j['actionTitle'] ?? '지금 바로 해볼 현실 전략').toString(),
+      ),
       actionItems: actions,
       auditFooter: enforcedFooter,
       warningMessage: (j['warningMessage'] ?? AppCopy.commonNotice).toString(),
@@ -335,10 +355,14 @@ class CompatResult {
   final Map<String, int> detailedScores;
   final Map<String, int> maxScores;
   final Map<String, String> itemFormulas;
+  final String briefingTitle;
   final String briefingBody; // K07-R3 + K09 입체 궁합 브리핑 전문
+  final String goodTitle;
   final List<String> goodParts;
+  final String riskTitle;
   final List<String> riskParts;
   final String finalJudgment;
+  final String actionTitle;
   final List<String> actionItems;
   final String auditFooter;
   final String? holdReason;
@@ -352,10 +376,14 @@ class CompatResult {
     required this.detailedScores,
     required this.maxScores,
     this.itemFormulas = const {},
+    this.briefingTitle = '마스터 궁합 브리핑 (K07-R3 · K09)',
     this.briefingBody = '',
+    this.goodTitle = '잘 맞는 시너지 요인',
     required this.goodParts,
+    this.riskTitle = '조심할 마찰 요인',
     required this.riskParts,
     required this.finalJudgment,
+    this.actionTitle = '지금 바로 해볼 현실 전략',
     required this.actionItems,
     this.auditFooter = '[적용 기준: K04, K06, K07-R3, K08, K09 | 확신도: HIGH(높음)]',
     required this.holdReason,

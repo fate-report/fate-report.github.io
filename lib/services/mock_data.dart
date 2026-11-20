@@ -34,10 +34,15 @@ class MockData {
         .map((e) => e.key)
         .toList();
 
+    final q = userQuestion.trim();
+    final hasQ = q.isNotEmpty;
+    final qIntro = hasQ
+        ? '질문해 주신 "$q"에 대해 $callName의 확정 명식(${s.yearPillar}년 ${s.monthPillar}월 ${s.dayPillar}일)을 기준으로 먼저 명확한 결론부터 말씀드릴게요.\n\n'
+        : '';
+
     switch (category) {
       case AnalysisCategory.basic:
-        final body = '''
-결론부터 말씀드리면, $callName은 스스로 납득이 되는 명확한 기준이 섰을 때 누구보다 단단한 추진력을 발휘하는 사람이에요. 지금처럼 생각이 많아지는 시기에는 모든 걸 한 번에 완벽히 해내려 하기보다, 내 에너지를 어디에 먼저 쓸지 우선순위를 좁히는 것이 가장 유리합니다.
+        final body = '''$qIntro결론부터 말씀드리면, $callName은 스스로 납득이 되는 명확한 기준이 섰을 때 누구보다 단단한 추진력을 발휘하는 사람이에요. 지금처럼 생각이 많아지는 시기에는 모든 걸 한 번에 완벽히 해내려 하기보다, 내 에너지를 어디에 먼저 쓸지 우선순위를 좁히는 것이 가장 유리합니다.
 
 타고난 기질의 중심($dm·$dmEl 기운)을 보면 $stemTrait 성향이 자리 잡고 있어요. 겉으로는 주변 분위기에 잘 맞추고 무던해 보여도, 내면에는 나만의 자존심과 기준선이 꽤 뚜렷한 편입니다. 그래서 남들이 시키는 대로만 움직이는 환경보다는 내가 직접 흐름을 설계하고 납득할 수 있을 때 집중력이 몇 배로 살아납니다.
 
@@ -46,11 +51,17 @@ class MockData {
 올해 2026년 병오(丙午)년 흐름은 $callName의 숨어 있던 표현력과 활동 반경을 밖으로 강하게 끌어내는 시기예요. 새로운 제안이나 환경 변화가 들어올 가능성이 높은데, 이때 조급하게 속도를 내기보다 내 체력과페이스부터 지키는 것이 올해 성패를 가릅니다.${s.hourUnknown ? '\n\n참고로 현재 출생시간이 입력되지 않아 시주를 제외한 3주 6글자 기준으로 분석해 드렸어요. 정확한 출생시간을 확인해 시주까지 더하면 말년 운과 세부 진로 적합도를 한층 더 정밀하게 보실 수 있습니다.' : ''}''';
 
         return AnalysisResult(
-          resultTitle: '$callName의 타고난 중심과 2026년 흐름 브리핑',
-          keyPoint: '내 기준이 설 때 가장 강해지며, 올해는 완벽주의를 내려놓고 선택과 집중을 할 때 길이 열립니다.',
+          resultTitle: hasQ
+              ? '$callName의 질문 맞춤형 사주 브리핑'
+              : '$callName의 타고난 중심과 2026년 흐름 브리핑',
+          keyPoint: hasQ
+              ? '"$q"에 대한 해답은 완벽주의를 내려놓고 내 기준에 맞는 핵심 1가지에 집중하는 것입니다.'
+              : '내 기준이 설 때 가장 강해지며, 올해는 완벽주의를 내려놓고 선택과 집중을 할 때 길이 열립니다.',
+          briefingTitle: hasQ ? '질문 맞춤 심층 브리핑' : '마스터 심층 브리핑',
           briefingBody: body,
-          resultSummary:
-              '$callName은 $stemTrait 기질을 바탕으로 스스로 방향을 정할 때 큰 성취를 만드는 구조입니다. 올해 병오년에는 활동 폭이 넓어지는 만큼 오버페이스를 줄이는 것이 핵심입니다.',
+          resultSummary: hasQ
+              ? ''
+              : '$callName은 $stemTrait 기질을 바탕으로 스스로 방향을 정할 때 큰 성취를 만드는 구조입니다. 올해 병오년에는 활동 폭이 넓어지는 만큼 오버페이스를 줄이는 것이 핵심입니다.',
           confidenceStatus: confStatus,
           goodPoints: [
             '스스로 납득한 목표에는 끝까지 파고드는 높은 몰입도와 책임감을 지니고 있습니다.',

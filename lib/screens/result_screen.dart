@@ -248,26 +248,93 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
+  Widget _userQuestionBanner() {
+    final q = widget.userQuestion.trim();
+    if (q.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.gold.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.gold.withValues(alpha: 0.45)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Q.',
+              style: GoogleFonts.notoSerifKr(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.accent,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                q,
+                style: GoogleFonts.notoSansKr(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _generalCards() {
     final r = _general!;
+    final showSummaryInHeader =
+        r.resultSummary.isNotEmpty && r.resultSummary != r.briefingBody;
     return Column(
       children: [
-        _keyResultCard(r.resultTitle, r.keyPoint, r.resultSummary),
+        _userQuestionBanner(),
+        _keyResultCard(
+          r.resultTitle,
+          r.keyPoint,
+          showSummaryInHeader ? r.resultSummary : '',
+        ),
         const SizedBox(height: 12),
         if (r.briefingBody.isNotEmpty) ...[
-          _masterBriefingCard('마스터 심층 브리핑', r.briefingBody),
+          _masterBriefingCard(
+            r.briefingTitle.isNotEmpty ? r.briefingTitle : '마스터 심층 브리핑',
+            r.briefingBody,
+          ),
           const SizedBox(height: 12),
         ],
         if (r.goodPoints.isNotEmpty)
-          _listCard('유리한 기회 · 강점 요인', r.goodPoints, AppColors.goodBg,
-              AppColors.signalGreen, Icons.eco_outlined),
+          _listCard(
+            r.goodTitle.isNotEmpty ? r.goodTitle : '유리한 기회 · 강점 요인',
+            r.goodPoints,
+            AppColors.goodBg,
+            AppColors.signalGreen,
+            Icons.eco_outlined,
+          ),
         if (r.goodPoints.isNotEmpty) const SizedBox(height: 12),
         if (r.riskPoints.isNotEmpty)
-          _listCard('주의할 리스크 요인', r.riskPoints, AppColors.riskBg,
-              AppColors.gold, Icons.warning_amber_rounded),
+          _listCard(
+            r.riskTitle.isNotEmpty ? r.riskTitle : '주의할 리스크 요인',
+            r.riskPoints,
+            AppColors.riskBg,
+            AppColors.gold,
+            Icons.warning_amber_rounded,
+          ),
         if (r.riskPoints.isNotEmpty) const SizedBox(height: 12),
-        _actionCard(r.actionItems),
-        const SizedBox(height: 12),
+        if (r.actionItems.isNotEmpty) ...[
+          _actionCard(
+            r.actionItems,
+            title: r.actionTitle.isNotEmpty ? r.actionTitle : '지금 바로 해볼 현실 전략',
+          ),
+          const SizedBox(height: 12),
+        ],
         _auditFooterCard(r.auditFooter, r.confidenceStatus),
         const SizedBox(height: 12),
         _noticeCard(r.warningMessage),
@@ -280,6 +347,7 @@ class _ResultScreenState extends State<ResultScreen> {
     if (!r.compatibilityAvailable) {
       return Column(
         children: [
+          _userQuestionBanner(),
           _holdCard(r.holdReason ?? '판정 보류'),
           const SizedBox(height: 12),
           _keyResultCard('판정 보류 (K08)', '지금은 점수를 확정하지 않았습니다', r.finalJudgment),
@@ -288,8 +356,10 @@ class _ResultScreenState extends State<ResultScreen> {
             _masterBriefingCard('판정 보류 안내', r.briefingBody),
             const SizedBox(height: 12),
           ],
-          _actionCard(r.actionItems),
-          const SizedBox(height: 12),
+          if (r.actionItems.isNotEmpty) ...[
+            _actionCard(r.actionItems),
+            const SizedBox(height: 12),
+          ],
           _auditFooterCard(r.auditFooter, ConfidenceStatus.hold),
           const SizedBox(height: 12),
           _noticeCard(AppCopy.compatNotice),
@@ -298,26 +368,49 @@ class _ResultScreenState extends State<ResultScreen> {
     }
     return Column(
       children: [
+        _userQuestionBanner(),
         _scoreCard(r),
         const SizedBox(height: 12),
         _detailScoresCard(r),
         const SizedBox(height: 12),
         if (r.briefingBody.isNotEmpty) ...[
-          _masterBriefingCard('마스터 궁합 브리핑 (K07-R3 · K09)', r.briefingBody),
+          _masterBriefingCard(
+            r.briefingTitle.isNotEmpty
+                ? r.briefingTitle
+                : '마스터 궁합 브리핑 (K07-R3 · K09)',
+            r.briefingBody,
+          ),
           const SizedBox(height: 12),
         ],
         if (r.goodParts.isNotEmpty)
-          _listCard('잘 맞는 시너지 요인', r.goodParts, AppColors.goodBg,
-              AppColors.signalGreen, Icons.favorite_outline),
+          _listCard(
+            r.goodTitle.isNotEmpty ? r.goodTitle : '잘 맞는 시너지 요인',
+            r.goodParts,
+            AppColors.goodBg,
+            AppColors.signalGreen,
+            Icons.favorite_outline,
+          ),
         if (r.goodParts.isNotEmpty) const SizedBox(height: 12),
         if (r.riskParts.isNotEmpty)
-          _listCard('조심할 마찰 요인', r.riskParts, AppColors.riskBg,
-              AppColors.gold, Icons.warning_amber_rounded),
+          _listCard(
+            r.riskTitle.isNotEmpty ? r.riskTitle : '조심할 마찰 요인',
+            r.riskParts,
+            AppColors.riskBg,
+            AppColors.gold,
+            Icons.warning_amber_rounded,
+          ),
         if (r.riskParts.isNotEmpty) const SizedBox(height: 12),
-        _keyResultCard('최종 관계 운영 방향', '', r.finalJudgment),
-        const SizedBox(height: 12),
-        _actionCard(r.actionItems),
-        const SizedBox(height: 12),
+        if (r.finalJudgment.isNotEmpty) ...[
+          _keyResultCard('핵심 결론 및 관계 운영 방향', '', r.finalJudgment),
+          const SizedBox(height: 12),
+        ],
+        if (r.actionItems.isNotEmpty) ...[
+          _actionCard(
+            r.actionItems,
+            title: r.actionTitle.isNotEmpty ? r.actionTitle : '지금 바로 해볼 현실 전략',
+          ),
+          const SizedBox(height: 12),
+        ],
         _auditFooterCard(
           r.auditFooter,
           r.auditFooter.contains('HIGH')
@@ -735,7 +828,10 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  Widget _actionCard(List<String> items) {
+  Widget _actionCard(
+    List<String> items, {
+    String title = '지금 바로 해볼 현실 전략',
+  }) {
     return SoftCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -745,12 +841,14 @@ class _ResultScreenState extends State<ResultScreen> {
               const Icon(Icons.check_circle_outline,
                   size: 18, color: AppColors.accent),
               const SizedBox(width: 8),
-              Text('지금 바로 해볼 현실 전략',
-                  style: GoogleFonts.notoSerifKr(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                  )),
+              Expanded(
+                child: Text(title,
+                    style: GoogleFonts.notoSerifKr(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    )),
+              ),
             ],
           ),
           const SizedBox(height: 12),

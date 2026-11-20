@@ -141,6 +141,32 @@ class SajuCalculator {
     return '${ganzhiFromIndex(idx)}(${ganzhiHanjaFromIndex(idx)})';
   }
 
+  /// 특정 연도의 양력 1~12월 절기 기준 월운(月運) 간지 조견표 생성 (사용자가 '몇 월', '상반기/하반기', '이번 달/다음 달' 질문 시 정밀 대응용)
+  static String buildYearlyMonthPillars(int year, {String? dayMaster}) {
+    // 양력 각 월 중순(15일) 기준 절기월 간지 산출:
+    // 1월(축월, 직전년 년간 기준), 2월(인월, 당해 년간 기준) ~ 12월(자월, 당해 년간 기준)
+    final curYearIdx = ((year - 4) % 60 + 60) % 60;
+    final curYearStem = heavenlyStems[curYearIdx % 10];
+    final prevYearIdx = ((year - 5) % 60 + 60) % 60;
+    final prevYearStem = heavenlyStems[prevYearIdx % 10];
+
+    final items = <String>[];
+    for (int m = 1; m <= 12; m++) {
+      // 양력 m월의 절기월 인덱스: 1월=11(축), 2월=0(인), 3월=1(묘) ... 12월=10(자)
+      final mBrIdx = (m == 1) ? 11 : (m - 2);
+      final yStem = (m == 1) ? prevYearStem : curYearStem;
+      final mStem = _monthStem(yStem, mBrIdx);
+      final mBranch = SolarTerms.monthBranchOrder[mBrIdx];
+      final pillar = '$mStem$mBranch';
+      final hanja = pillarToHanja(pillar);
+      final tenGod = (dayMaster != null && dayMaster.isNotEmpty)
+          ? '(${calculateTenGod(dayMaster, mStem)}/${calculateTenGod(dayMaster, (branchHiddenStems[mBranch] ?? const ['']).first)})'
+          : '';
+      items.add('$m월=$pillar($hanja)$tenGod');
+    }
+    return items.join(', ');
+  }
+
   /// 음력/윤달 여부를 반영하여 실제 양력 생년월일로 변환
   static DateTime resolveSolarBirthDate(
     DateTime rawDate,

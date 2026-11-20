@@ -146,16 +146,28 @@ class AiService {
       detailedScores: comp.detailedScores,
       maxScores: comp.maxScores,
       itemFormulas: comp.itemFormulas,
+      briefingTitle: JevHarnessValidator.sanitizeText(
+        (json['briefingTitle'] ?? '마스터 궁합 브리핑 (K07-R3 · K09)').toString(),
+      ),
       briefingBody: lockedBody,
+      goodTitle: JevHarnessValidator.sanitizeText(
+        (json['goodTitle'] ?? '잘 맞는 시너지 요인').toString(),
+      ),
       goodParts: _strList(json['goodParts'])
           .map(JevHarnessValidator.sanitizeText)
           .where((s) => s.isNotEmpty)
           .toList(),
+      riskTitle: JevHarnessValidator.sanitizeText(
+        (json['riskTitle'] ?? '조심할 마찰 요인').toString(),
+      ),
       riskParts: _strList(json['riskParts'])
           .map(JevHarnessValidator.sanitizeText)
           .where((s) => s.isNotEmpty)
           .toList(),
       finalJudgment: rawFinal.isNotEmpty ? rawFinal : '두 사람의 다름을 이해하고 대화 리듬을 맞추는 것이 핵심입니다.',
+      actionTitle: JevHarnessValidator.sanitizeText(
+        (json['actionTitle'] ?? '지금 바로 해볼 현실 전략').toString(),
+      ),
       actionItems: _strList(json['actionItems'])
           .map(JevHarnessValidator.sanitizeText)
           .where((s) => s.isNotEmpty)

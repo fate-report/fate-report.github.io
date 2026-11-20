@@ -28,6 +28,7 @@ class PromptBuilder {
     final prevYearGanji = SajuCalculator.seunPillarOfYear(seunYear - 1);
 
     String ageLock = '';
+    String? dmForMonth;
     if (user?.birthDate != null) {
       final (manAge, krAge) = SajuCalculator.calculateAges(
         user!.birthDate!,
@@ -36,6 +37,8 @@ class PromptBuilder {
       );
       ageLock +=
           '\n- 본인 현재 나이(${dt.year}년 기준): 만 $manAge세 (연 나이 $krAge세)';
+      final uSaju = user.toSaju();
+      if (uSaju.dayMaster.isNotEmpty) dmForMonth = uSaju.dayMaster;
     }
     if (partner?.partnerBirthDate != null) {
       final (pManAge, pKrAge) = SajuCalculator.calculateAges(
@@ -47,11 +50,113 @@ class PromptBuilder {
           '\n- 상대 현재 나이(${dt.year}년 기준): 만 $pManAge세 (연 나이 $pKrAge세)';
     }
 
+    final thisYearMonths = SajuCalculator.buildYearlyMonthPillars(
+      dt.year,
+      dayMaster: dmForMonth,
+    );
+    final nextYearMonths = SajuCalculator.buildYearlyMonthPillars(
+      dt.year + 1,
+      dayMaster: dmForMonth,
+    );
+
     return '''[0. 절대 시점 및 세운·월운·나이 기준 Lock (Temporal Hard Lock — 하네스 1 최우선 강제)]
 - 오늘 실시간 날짜(KST): ${dt.year}년 ${dt.month}월 ${dt.day}일
 - '올해(현재 연도 세운, K03 입춘 기준)' = ${dt.year}년 $thisYearGanji년 세운 | '작년' = ${dt.year - 1}년 $prevYearGanji년 | '내년' = ${dt.year + 1}년 $nextYearGanji년
 - '이번 달(현재 절기 월운, K02·K05)' = ${todaySaju.monthPillar}(${todaySaju.monthPillarHanja})월 | '오늘 일진' = ${todaySaju.dayPillar}(${todaySaju.dayPillarHanja})일$ageLock
+- 올해(${dt.year}년) 1~12월 절기 월운 조견표(특정 월·시기 질문 시 즉시 참조): $thisYearMonths
+- 내년(${dt.year + 1}년) 1~12월 절기 월운 조견표: $nextYearMonths
 - [절대 금지 경고]: 사전학습 데이터의 과거 시점인 "2024년(갑진년)"이나 "2025년(을사년)"을 '올해/현재'라고 부르거나 2024년 기준으로 나이와 대운을 역산하는 행위를 절대 금지합니다. 모든 '올해/이번 달/지금' 표현은 반드시 ${dt.year}년($thisYearGanji년) 기준이어야 합니다.''';
+  }
+
+  /// 사용자 자유 질문(STEP 3)의 의도·형식(단문/비교/전문명리/구체적 고민)을 판별하여
+  /// 고정된 틀에 끼워 맞추지 않고 100% 질문에 맞춰 답하도록 만드는 동적 지침 생성기
+  static ({
+    bool hasCustomQuestion,
+    bool isShortRequest,
+    bool isComparison,
+    bool isTechnicalMyeongri,
+    String directiveBlock,
+  }) _analyzeQuestionIntent({
+    required String userQuestion,
+    required String callName,
+    required String partnerName,
+    required bool hasPartner,
+    required bool isCompatCategory,
+  }) {
+    final q = userQuestion.trim();
+    final hasCustom = q.isNotEmpty;
+
+    final isShort = hasCustom &&
+        RegExp(r'(한\s*줄|짧게|결론만|간단히|핵심만|점수만|요약만)').hasMatch(q);
+
+    final isTech = hasCustom &&
+        RegExp(r'(명리|용신|희신|기신|십성|십신|지장간|12운성|격국|조후|억부|합충|형충|통근|투간|원국|자세히\s*설명|근거)')
+            .hasMatch(q);
+
+    final isComp = hasCustom &&
+        (RegExp(r'(vs|VS|비교|중에서|중에\s|어디가|어느\s*쪽|언제가|할까\s*말까|나을까|좋을까|갈까\s*말까|이직할까|창업할까|연락할까|기다릴까|헤어질까|만날까)')
+                .hasMatch(q) ||
+            (q.contains('할까') && (q.contains('아니면') || q.contains('그냥'))));
+
+    if (!hasCustom) {
+      // 사용자가 질문을 비워둔 경우: 카테고리 종합 분석
+      final bodyRule = isCompatCategory
+          ? '- 정량 요약 아래에는 **첫 문장 명확한 결론**을 제시한 뒤, 굵은 소제목(예: `**두 사람이 서로에게 끌리는 진짜 이유**`, `**현실 연애와 대화에서 부딪히기 쉬운 순간**`, `**올해 관계 흐름과 맞춤 소통 전략**`)을 활용해 두 사람의 기질·조후·배우자궁 작용과 오행 보완을 다정하고 깊이 있게 풀어주세요.'
+          : '- 글머리 기호(•, -)나 번호 매기기(1., 2.)를 쓰지 말고, 순수 문단 줄바꿈(\\n\\n)으로만 친한 전문가가 카톡으로 이야기해 주듯 풀어내세요. (첫 문장 결론 / 내면 심리와 기질[K09 축1·축2] / ${hasPartner ? "$partnerName의 속마음과 관계 모습[K09 축3 & K07-R3]" : "현실·연애·진로에서 나타나는 모습[K09 축3·축4]"} / 올해 세운·월운 흐름과 조언[K10]) 2~4문장 단위로 자주 줄바꿈하여 4~5개 문단으로 작성하세요.';
+      return (
+        hasCustomQuestion: false,
+        isShortRequest: false,
+        isComparison: false,
+        isTechnicalMyeongri: false,
+        directiveBlock: bodyRule,
+      );
+    }
+
+    final buffer = StringBuffer();
+    buffer.writeln(
+      '★ [최우선 절대 명령 — 사용자 자유 질문 100% 맞춤형 직답 원칙 (고정 틀 끼워 맞추기 절대 금지)]:',
+    );
+    buffer.writeln(
+      '   - 사용자가 STEP 3에서 다음 질문을 직접 던졌습니다: "$q"',
+    );
+    buffer.writeln(
+      '   - 판에 박힌 사주 전체 총평(타고난 기질 일반론 → 진로 일반론 → 올해 총평)이나 고정된 목차에 이 질문을 억지로 끼워 맞추지 마세요!',
+    );
+    buffer.writeln(
+      '   - `resultTitle`, `keyPoint`, `briefingTitle`, `briefingBody`, 그리고 하단 카드 제목(`goodTitle`, `riskTitle`, `actionTitle`)까지 **모두 오직 사용자의 질문("$q")에 직답하는 내용과 제목으로 100% 맞춤 설계**하세요.',
+    );
+
+    if (isShort) {
+      buffer.writeln(
+        '   - **[단문/핵심 직답 모드 발동]**: 사용자가 짧고 간결한 결론을 원하므로, 장황한 4~5문단 설명을 절대 쓰지 마세요. `briefingBody`를 1~2개의 짧은 핵심 문단(2~4문장 이내)으로 명쾌하게 직답하고, `resultSummary`는 빈 문자열(`""`), `goodPoints`, `riskPoints`, `actionItems`는 모두 빈 배열(`[]`)로 출력하여 불필요한 카드가 뜨지 않게 하세요.',
+      );
+    } else if (isComp) {
+      buffer.writeln(
+        '   - **[양자택일·비교·결정 맞춤 모드 발동]**: 사용자가 선택/비교/타이밍 결정을 묻고 있으므로, 첫 문장에 **"어느 쪽(또는 언제)이 더 유리한지" 명확한 최종 결론**부터 못 박으세요. 그 아래에는 **사용자가 질문에서 제시한 실제 선택지나 시기**를 그대로 `**굵은 소제목**`으로 삼아 각각의 기회와 리스크를 동일 평가축(K09·K10)으로 정면 비교해 주세요.',
+      );
+    } else {
+      buffer.writeln(
+        '   - **[구체적 고민 1:1 심층 직답 모드 발동]**: 첫 문장에 "$q"에 대한 가장 명확한 결론(Yes/No/타이밍/핵심 이유)을 바로 제시하세요. 이어지는 문단들도 고정 틀을 버리고, ① 왜 내 사주(또는 두 사람 관계 구조)에서 지금 그런 상황·고민이 벌어지는지, ② 질문과 관련된 시기(해당 월운·세운·대운) 흐름이 언제 어떻게 풀리는지, ③ 이 질문 상황에서 당장 어떻게 행동·대화해야 하는지를 자연스러운 문단 줄바꿈(\\n\\n)으로 콕 집어 풀어주세요.',
+      );
+    }
+
+    if (isTech) {
+      buffer.writeln(
+        '   - **[전문 명리 해설 허용 모드 발동 (0절 1항 예외)]**: 사용자가 명리학적 근거/전문 해설을 원하므로 전문 용어를 숨기지 마세요! 먼저 이해하기 쉬운 결론을 말한 뒤, 실제 작용한 천간·지지·십성·지장간·12운성·조후·억부·합충 원리를 구체적인 명리 용어와 함께 상세히 풀어주세요.',
+      );
+    } else {
+      buffer.writeln(
+        '   - 전문 명리 용어(일간, 십성, 지장간, 조후, 억부, 12운성 등)는 그대로 노출하지 말고 일상 심리·대화 습관·현실 상황으로 생생하게 번역해서 설명하세요.',
+      );
+    }
+
+    return (
+      hasCustomQuestion: true,
+      isShortRequest: isShort,
+      isComparison: isComp,
+      isTechnicalMyeongri: isTech,
+      directiveBlock: buffer.toString().trimRight(),
+    );
   }
 
   static String systemInstruction() {
@@ -304,10 +409,13 @@ ${ps.toDetailedSlotText(gender: partner.partnerGender)}$compatFactSection
           '$categoryName 관점에서 제 타고난 기질, 강점, 주의할 점과 올해 흐름을 다정하게 풀어주세요.';
     }
 
-    final isComparison = userQuestion.contains('vs') ||
-        userQuestion.contains('비교') ||
-        userQuestion.contains('중 ') ||
-        userQuestion.contains('내년');
+    final intent = _analyzeQuestionIntent(
+      userQuestion: userQuestion,
+      callName: callName,
+      partnerName: pName,
+      hasPartner: hasPartner,
+      isCompatCategory: false,
+    );
 
     return '''
 $temporalLock
@@ -319,27 +427,31 @@ ${s.toDetailedSlotText(gender: user.gender)}
 $partnerBlock
 [질문 카테고리 및 사용자 실제 고민]
 - 선택 카테고리: $categoryName ${category == AnalysisCategory.love ? (hasPartner ? '(상대방 명식 포함 관계·속마음 분석)' : '(솔로/본인 중심 연애·배우자운 분석)') : ''}
-- 사용자 질문: ${userQuestion.isEmpty ? defaultQuestion : userQuestion}
+- 사용자 실제 질문: ${intent.hasCustomQuestion ? '"${userQuestion.trim()}" (★ 사용자가 직접 입력한 최우선 질문)' : defaultQuestion}
 
 [필수 수행 지침 (0절~3절 & K04·K06·K09·K10 강제 게이트)]
-1. **호칭 및 첫 문장 두괄식 결론**: `$callName`으로 다정하게 부르며, **첫 문장에 질문 의도에 대한 명확한 결론부터 제시**하세요. 전문 명리 용어(일간, 십성, 지장간, 조후, 억부, 12운성 등)는 숨기고 일상 심리·대화 습관·일하는 스타일·현실 행동으로 번역하세요.
-2. **briefingBody 작성 규칙 (0절 2항 투트랙 문단 설계)**:
-   ${isComparison ? '- 비교·결정 질문이므로 유도리 있게 **굵은 소제목**과 구분점을 활용해 선택지별 차이를 한눈에 들어오게 정리하세요.' : '- 일상·운세·성향·속마음 질문이므로 **글머리 기호(•, -)나 번호 매기기(1., 2.)를 절대 쓰지 말고**, 오직 순수 문단 줄바꿈(\n\n)으로만 친한 전문가가 카톡으로 옆에서 조곤조곤 이야기해 주듯 풀어내세요. 화제가 바뀔 때마다(첫 문장 결론 / 이유와 내면 심리[K09 축1·축2] / ${hasPartner ? "$pName의 속마음과 두 사람 관계에서 나타나는 모습[K09 축3 & K07-R3 팩트 반영]" : "현실·연애·진로에서 나타나는 모습[K09 축3·축4]"} / 올해 세운 흐름과 조심할 점·현실 조언[K10]) **2~4문장 단위로 자주 줄바꿈(\n\n)**하여 최소 4~5개 문단으로 깊이 있고 술술 읽히게 작성하세요.'}
+1. **호칭 및 첫 문장 두괄식 직답**: `$callName`으로 다정하게 부르며, **첫 문장에 사용자가 물은 질문에 대한 가장 명확한 직답(결론)부터 바로 제시**하세요.
+2. **질문 맞춤형 구조 및 문단 설계 (0절 1~4항)**:
+${intent.directiveBlock}
 3. **하네스 4 확신도 판정**:
    - 출생시간 미상(`${s.hourUnknown}`)이거나 K05/K08 경계 주의사항이 있으면 `confidenceLevel`을 `"MEDIUM"` 또는 `"LOW"`로 설정하고, 시주 제외 사실이나 경계 확인 안내를 자연스럽게 덧붙이세요.
 
 응답 JSON 스키마 (순수 JSON만 출력):
 {
-  "jevLock": "하네스 1~4 내부 대조 요약 1줄 (K04 원국·지장간 확인, K09 4대 축 적용, BLIND-FIRST 반증 완료)",
+  "jevLock": "하네스 1~4 내부 대조 요약 1줄 (사용자 질문 직답 여부, K04 원국·지장간 확인, K09·K10 근거 대조 완료)",
   "appliedKRules": ["K04", "K06", "K09", "K10"],
   "confidenceLevel": "HIGH" | "MEDIUM" | "LOW",
-  "resultTitle": "$callName을 위한 다정하고 핵심을 찌르는 제목",
-  "keyPoint": "질문에 대한 가장 명확한 두괄식 핵심 결론 한 문장",
-  "briefingBody": "0절 투트랙 원칙을 100% 준수한 다문단(\\n\\n 줄바꿈) 심층 브리핑 전문 (충분히 깊고 자세하게 작성)",
-  "resultSummary": "상단 요약 카드용 핵심 요약 (2~3문장)",
-  "goodPoints": ["타고난 강점·유리한 기회 요인 2~3개 (각 1~2문장)"],
-  "riskPoints": ["주의해야 할 내면/현실 리스크 요인 2~3개 (각 1~2문장)"],
-  "actionItems": ["지금 당장 실천할 수 있는 구체적 현실 행동 전략 2~3개"],
+  "resultTitle": "${intent.hasCustomQuestion ? '사용자 질문에 100% 맞춘 맞춤형 답변 제목' : '$callName을 위한 다정하고 핵심을 찌르는 제목'}",
+  "keyPoint": "사용자의 질문에 대한 가장 명확한 두괄식 핵심 직답 한 문장",
+  "briefingTitle": "${intent.hasCustomQuestion ? '질문 주제에 딱 맞춘 브리핑 제목 (예: 올해 10월 창업 타이밍과 성공 조건)' : '마스터 심층 브리핑'}",
+  "briefingBody": "고정 틀에 끼워 맞추지 않고 사용자 질문 의도에 100% 맞춰 작성한 본문 전문 (\\n\\n 줄바꿈)",
+  "resultSummary": "${intent.isShortRequest ? '' : '상단 요약 (자유 질문일 때는 본문과 중복되지 않게 핵심만 1~2문장 또는 빈 문자열)'}",
+  "goodTitle": "${intent.hasCustomQuestion ? '이 질문 상황에서 나에게 유리하게 작용하는 포인트' : '유리한 기회 · 강점 요인'}",
+  "goodPoints": ${intent.isShortRequest ? '[]' : '["질문과 직결된 유리한 근거·기회 2~3개 (단문 요청이나 불필요 시 [] 빈 배열)"]'},
+  "riskTitle": "${intent.hasCustomQuestion ? '이 질문 상황에서 반드시 조심해야 할 리스크' : '주의할 리스크 요인'}",
+  "riskPoints": ${intent.isShortRequest ? '[]' : '["질문과 직결된 주의점·리스크 2~3개 (단문 요청이나 불필요 시 [] 빈 배열)"]'},
+  "actionTitle": "${intent.hasCustomQuestion ? '지금 당장 실행할 맞춤 행동 전략' : '지금 바로 해볼 현실 전략'}",
+  "actionItems": ${intent.isShortRequest ? '[]' : '["질문 해결을 위해 지금 당장 실천할 구체적 행동 2~3개 (단문 요청 시 [] 빈 배열)"]'},
   "auditFooter": "[적용 기준: K04, K06, K09, K10 | 확신도: HIGH(높음) / MEDIUM(보통) / LOW(낮음) 중 택1]",
   "warningMessage": "${AppCopy.commonNotice}"
 }
@@ -393,6 +505,13 @@ K08 기준에 따라 억지로 점수를 단정하지 말고, 왜 보류인지 �
 
     final k07SummaryBlock = comp.toK07SummaryBlock();
     final factsText = comp.factsForAi.map((f) => '  • $f').join('\n');
+    final intent = _analyzeQuestionIntent(
+      userQuestion: userQuestion,
+      callName: myName,
+      partnerName: pName,
+      hasPartner: true,
+      isCompatCategory: true,
+    );
 
     return '''
 $temporalLock
@@ -411,26 +530,30 @@ $k07SummaryBlock
 $factsText
 
 [사용자 실제 질문/고민]
-${userQuestion.isEmpty ? '두 사람의 궁합 점수와 잘 맞는 점, 부딪히는 지점, 그리고 앞으로 관계를 잘 가꾸기 위한 현실 조언을 자세히 알려주세요.' : userQuestion}
+${intent.hasCustomQuestion ? '"${userQuestion.trim()}" (★ 사용자가 직접 입력한 최우선 질문)' : '두 사람의 궁합 점수와 잘 맞는 점, 부딪히는 지점, 그리고 앞으로 관계를 잘 가꾸기 위한 현실 조언을 자세히 알려주세요.'}
 
 [필수 수행 지침 (0절 Track B & K04·K06·K07-R3·K09·K10 강제 게이트)]
 1. **궁합 암산 금지 및 정량 요약 상단 제시 (K07-R3 락)**:
    - `briefingBody` 맨 첫머리에 위 `[궁합 정량 요약: 총점 ${comp.compatibilityScore}점 ...]` 블록(항목별 득점/만점 및 기본 점수 + 실제 작용 글자 가감 근거 포함)을 **단 1점의 변경도 없이** 먼저 제시하세요.
-2. **두 사람의 K09 실전 통변 4대 축 입체 해설**:
-   - 정량 요약 아래에는 **첫 문장 명확한 결론**을 제시한 뒤, 굵은 소제목(예: `**두 사람이 서로에게 끌리는 진짜 이유**`, `**현실 연애와 대화에서 부딪히기 쉬운 순간**`, `**2026년 병오년 관계 흐름과 맞춤 소통 전략**`)을 활용해 두 사람의 기질·계절 온도(조후)·배우자궁(일지) 작용과 오행 보완이 실제 대화 습관, 서운함 포인트, 갈등 해법으로 어떻게 나타나는지 다정하고 깊이 있게 풀어주세요. (전문 용어는 일상 심리·행동 언어로 번역)
+2. **사용자 질문 맞춤형 입체 해설 (고정 소제목 틀 강제 금지)**:
+${intent.directiveBlock}
 3. **하네스 4 종료 태그**:
    - `auditFooter`에는 반드시 `[적용 기준: K04, K06, K07-R3, K08, K09, K10 | 확신도: ${comp.hourIncluded ? 'HIGH(높음)' : 'MEDIUM(보통)'}]` 형식으로 표기하세요.
 
 응답 JSON 스키마 (순수 JSON만 출력):
 {
-  "jevLock": "하네스 1~4 검산 요약 (K07-R3 총점 ${comp.compatibilityScore}점 수식 일치 확인, K09 양측 4대 축 비교 완료)",
+  "jevLock": "하네스 1~4 검산 요약 (사용자 질문 직답 확인, K07-R3 총점 ${comp.compatibilityScore}점 수식 일치 확인)",
   "appliedKRules": ["K04", "K06", "K07-R3", "K08", "K09", "K10"],
   "confidenceLevel": "${comp.hourIncluded ? 'HIGH' : 'MEDIUM'}",
-  "briefingBody": "상단 [궁합 정량 요약] + 항목별 수식 근거 + 굵은 소제목 중심의 다정하고 깊이 있는 궁합 스토리 브리핑 전문 (\\n\\n 줄바꿈 포함)",
-  "goodParts": ["두 관계의 핵심 강점·시너지 포인트 2~3개 (구체적 일상 모습 포함)"],
-  "riskParts": ["반드시 조심해야 할 갈등·온도차 포인트 2~3개 (구체적 상황 포함)"],
-  "finalJudgment": "$myName과 $pName 관계를 위한 핵심 결론 및 장기 관계 운영 요약 (2~4문장)",
-  "actionItems": ["두 사람이 당장 실천할 수 있는 구체적 대화법·행동 약속 2~3개"],
+  "briefingTitle": "${intent.hasCustomQuestion ? '질문 주제에 딱 맞춘 궁합 브리핑 제목' : '마스터 궁합 브리핑 (K07-R3 · K09)'}",
+  "briefingBody": "상단 [궁합 정량 요약] + 사용자 질문에 100% 맞춰 답하는 다정하고 깊이 있는 궁합 브리핑 전문 (\\n\\n 줄바꿈 포함)",
+  "goodTitle": "${intent.hasCustomQuestion ? '이 질문 상황에서 두 사람에게 유리한 시너지' : '잘 맞는 시너지 요인'}",
+  "goodParts": ${intent.isShortRequest ? '[]' : '["질문 맥락과 직결된 두 사람의 강점·시너지 포인트 2~3개"]'},
+  "riskTitle": "${intent.hasCustomQuestion ? '이 질문 상황에서 조심해야 할 마찰 요인' : '조심할 마찰 요인'}",
+  "riskParts": ${intent.isShortRequest ? '[]' : '["질문 맥락과 직결된 주의점·갈등 포인트 2~3개"]'},
+  "finalJudgment": "사용자 질문에 대한 핵심 결론 및 관계 운영 방향 요약 (1~3문장)",
+  "actionTitle": "${intent.hasCustomQuestion ? '지금 당장 실천할 맞춤 행동·대화 전략' : '지금 바로 해볼 현실 전략'}",
+  "actionItems": ${intent.isShortRequest ? '[]' : '["질문 해결을 위해 두 사람이 당장 실천할 구체적 행동 2~3개"]'},
   "auditFooter": "[적용 기준: K04, K06, K07-R3, K08, K09, K10 | 확신도: ${comp.hourIncluded ? 'HIGH(높음)' : 'MEDIUM(보통)'}]",
   "holdReason": null
 }
