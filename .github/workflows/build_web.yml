@@ -30,6 +30,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Analyze Dart code
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
       - name: Run Flutter unit & widget tests
         run: flutter test
 
@@ -48,18 +51,18 @@ jobs:
 
       - name: Publish prebuilt Cloudflare bundle to cloudflare-dist branch
         run: |
+          rm -rf /tmp/cf_dist
           mkdir -p /tmp/cf_dist
           cp -r build/web/* /tmp/cf_dist/
           cp -r functions /tmp/cf_dist/functions
+          cd /tmp/cf_dist
+          git init
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout --orphan cloudflare-dist
-          git rm -rf .
-          cp -r /tmp/cf_dist/* .
+          git checkout -b cloudflare-dist
           git add -A
           git commit -m "chore: build latest Fate Report web bundle for Cloudflare Pages"
-          git push origin cloudflare-dist --force
-          git checkout main
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" cloudflare-dist:cloudflare-dist --force
 
       - name: Build Flutter Web (GitHub Pages Mirror)
         run: |
@@ -70,11 +73,15 @@ jobs:
 
       - name: Publish live mirror to gh-pages branch
         run: |
+          rm -rf /tmp/gh_dist
           mkdir -p /tmp/gh_dist
           cp -r build/web/* /tmp/gh_dist/
-          git checkout --orphan gh-pages
-          git rm -rf .
-          cp -r /tmp/gh_dist/* .
+          touch /tmp/gh_dist/.nojekyll
+          cd /tmp/gh_dist
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b gh-pages
           git add -A
           git commit -m "chore: deploy Fate Report web mirror to GitHub Pages"
-          git push origin gh-pages --force
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages:gh-pages --force

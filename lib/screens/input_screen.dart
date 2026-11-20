@@ -135,9 +135,8 @@ class _InputScreenState extends State<InputScreen> {
 
       // 명식 계산 (K04 대운 및 K05/K08 경계 감지 포함)
       if (_user.birthDate != null && !_user.manualOverride) {
-        final t = _parseTime(_user.birthTime);
-        final timeUnknownEffective = _user.birthTimeUnknown || t == null;
-        if (!timeUnknownEffective && t != null) {
+        final t = _user.birthTimeUnknown ? null : _parseTime(_user.birthTime);
+        if (t != null) {
           _user.birthTime =
               '${t.$1.toString().padLeft(2, '0')}:${t.$2.toString().padLeft(2, '0')}';
         }
@@ -145,8 +144,8 @@ class _InputScreenState extends State<InputScreen> {
           year: _user.birthDate!.year,
           month: _user.birthDate!.month,
           day: _user.birthDate!.day,
-          hour: timeUnknownEffective ? null : t.$1,
-          minute: timeUnknownEffective ? null : t.$2,
+          hour: t?.$1,
+          minute: t?.$2,
           placeName: _user.birthPlace,
           applyLocalTime: _user.applyLocalTime,
           gender: _user.gender,
@@ -157,19 +156,19 @@ class _InputScreenState extends State<InputScreen> {
       if (_effectiveNeedsPartner &&
           _partner.partnerBirthDate != null &&
           !_partner.partnerManualOverride) {
-        final t = _parseTime(_partner.partnerBirthTime);
-        final pTimeUnknownEffective =
-            _partner.partnerBirthTimeUnknown || t == null;
-        if (!pTimeUnknownEffective && t != null) {
+        final pt = _partner.partnerBirthTimeUnknown
+            ? null
+            : _parseTime(_partner.partnerBirthTime);
+        if (pt != null) {
           _partner.partnerBirthTime =
-              '${t.$1.toString().padLeft(2, '0')}:${t.$2.toString().padLeft(2, '0')}';
+              '${pt.$1.toString().padLeft(2, '0')}:${pt.$2.toString().padLeft(2, '0')}';
         }
         final r = SajuCalculator.calculate(
           year: _partner.partnerBirthDate!.year,
           month: _partner.partnerBirthDate!.month,
           day: _partner.partnerBirthDate!.day,
-          hour: pTimeUnknownEffective ? null : t.$1,
-          minute: pTimeUnknownEffective ? null : t.$2,
+          hour: pt?.$1,
+          minute: pt?.$2,
           placeName: _partner.partnerBirthPlace,
           applyLocalTime: _partner.partnerApplyLocalTime,
           gender: _partner.partnerGender,

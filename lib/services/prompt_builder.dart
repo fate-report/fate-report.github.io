@@ -394,9 +394,14 @@ class PromptBuilder {
     final callName =
         user.userName.trim().isEmpty ? '회원님' : '${user.userName.trim()}님';
     final genderStr = user.gender == 'male' ? '남성' : '여성';
+    final calLabel = switch (user.calendarType) {
+      'lunar' => '음력 평달',
+      'lunar_leap' => '음력 윤달',
+      _ => '양력',
+    };
     final birthDateStr = user.birthDate == null
         ? '미입력'
-        : '${user.birthDate!.year}년 ${user.birthDate!.month}월 ${user.birthDate!.day}일 (${user.calendarType == 'lunar' ? '음력' : '양력'})';
+        : '${user.birthDate!.year}년 ${user.birthDate!.month}월 ${user.birthDate!.day}일 ($calLabel)';
     final birthTimeStr =
         user.birthTimeUnknown ? '출생시간 미상' : (user.birthTime ?? '출생시간 미상');
     final categoryName = _categoryName(category);
@@ -428,10 +433,10 @@ ${ps.toDetailedSlotText(gender: partner.partnerGender)}$compatFactSection
 
     final hasPartner =
         partner != null && (partner.partnerDayPillar?.isNotEmpty ?? false);
-    final pName = hasPartner
-        ? (partner.partnerName.trim().isEmpty
-            ? '상대분'
-            : partner.partnerName.trim())
+    final pName = (partner != null &&
+            (partner.partnerDayPillar?.isNotEmpty ?? false) &&
+            partner.partnerName.trim().isNotEmpty)
+        ? partner.partnerName.trim()
         : '상대분';
 
     String defaultQuestion;

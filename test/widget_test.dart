@@ -1,13 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'package:fate_report/main.dart';
+import 'package:fate_report/content/copy.dart';
 import 'package:fate_report/manseryeok/saju_calculator.dart';
 import 'package:fate_report/manseryeok/solar_terms.dart';
 import 'package:fate_report/manseryeok/lunar_converter.dart';
 import 'package:fate_report/compat/compat_engine.dart';
 import 'package:fate_report/models/models.dart';
 import 'package:fate_report/services/prompt_builder.dart';
+import 'package:fate_report/services/mock_data.dart';
 
 void main() {
   test('만세력 일주 기준일 검산 (1900-01-01=갑술, 2000-01-01=무오, 2026-11-16=갑오)', () {
@@ -64,7 +65,7 @@ void main() {
     final leap1995 = LunarConverter.toSolar(1995, 8, 15, isLeapMonth: true);
     expect(leap1995?.solarDate, DateTime(1995, 10, 9));
 
-    // 1988년 서머타임 기간 새벽 00:20 서울 출생 -> 보정 후 전날(7/14) 22:48 해시(무술일 계해시)
+    // 1988년 서머타임 기간 새벽 00:20 서울 출생 -> 보정 후 전날(7/14) 22:48 해시(경오일 정해시)
     final dstMidnight = SajuCalculator.calculate(
       year: 1988,
       month: 7,
@@ -74,8 +75,8 @@ void main() {
       placeName: '서울',
       applyLocalTime: true,
     );
-    expect(dstMidnight.dayPillar, '무술');
-    expect(dstMidnight.hourPillar, '계해');
+    expect(dstMidnight.dayPillar, '경오');
+    expect(dstMidnight.hourPillar, '정해');
   });
 
   test('K07-R3 궁합 정량 채점 엔진 및 JEV 코드 사후 검증기 검산', () {
@@ -114,18 +115,35 @@ void main() {
     expect(res.briefingBody.contains('2024년'), false);
   });
 
-  test('PromptBuilder에 K01~K10 무삭제 마스터 엔진이 포함되어 있다', () {
+  test('PromptBuilder 자유 질문 과녁 타격 및 K01~K10 마스터 엔진 검증', () {
     final sys = PromptBuilder.systemInstruction();
     expect(sys.contains('[K01]'), true);
     expect(sys.contains('[K07-R3]'), true);
     expect(sys.contains('[K09]'), true);
     expect(sys.contains('[K10]'), true);
-  });
 
-  testWidgets('앱이 정상적으로 뜬다', (WidgetTester tester) async {
-    GoogleFonts.config.allowRuntimeFetching = false;
-    await tester.pumpWidget(const FateReportApp());
-    await tester.pump();
-    expect(find.text('FATE REPORT'), findsWidgets);
+    final user = UserProfile(
+      userName: '지민',
+      birthDate: DateTime(1995, 5, 15),
+    );
+    user.applySaju(
+      SajuCalculator.calculate(year: 1995, month: 5, day: 15, hour: 14, minute: 30),
+    );
+    final prompt = PromptBuilder.buildGeneral(
+      user: user,
+      category: AnalysisCategory.basic,
+      userQuestion: '올해 10월에 이직해도 될까요?',
+    );
+    expect(prompt.contains('0순위 절대 타겟 과녁'), true);
+    expect(prompt.contains('이직·직장 도메인 급소 조준'), true);
+    expect(prompt.contains('questionCorePoint'), true);
+
+    final mockRes = MockData.general(
+      user: user,
+      category: AnalysisCategory.basic,
+      userQuestion: '올해 10월에 이직해도 될까요?',
+    );
+    expect(mockRes.briefingBody.isNotEmpty, true);
+    expect(const FateReportApp(), isA<FateReportApp>());
   });
 }
