@@ -4,7 +4,14 @@ library;
 class LunarConversionResult {
   final DateTime solarDate;
   final bool hasLeapMonthInSameMonth;
-  const LunarConversionResult({required this.solarDate, required this.hasLeapMonthInSameMonth});
+  final bool isLeapMonthApplied;
+  final bool wasDayClamped;
+  const LunarConversionResult({
+    required this.solarDate,
+    required this.hasLeapMonthInSameMonth,
+    this.isLeapMonthApplied = false,
+    this.wasDayClamped = false,
+  });
 }
 
 class LunarConverter {
@@ -174,18 +181,95 @@ class LunarConverter {
     2033: 11,
   };
 
-  /// 음력 생년월일(평달 기준)을 양력 DateTime으로 변환
-  static LunarConversionResult? toSolar(int lunarYear, int lunarMonth, int lunarDay) {
+  /// 윤달이 있는 해에서 해당 월의 '평달' 일수 (29일 또는 30일 — 윤달 초하루 오프셋 정밀 산출용)
+  static const Map<int, int> _regDaysBeforeLeap = {
+    1922: 30, 1925: 30, 1928: 30, 1930: 30, 1933: 30, 1936: 30, 1938: 30,
+    1941: 30, 1944: 30, 1947: 30, 1949: 30, 1952: 30, 1955: 30, 1957: 30,
+    1960: 30, 1963: 30, 1966: 30, 1968: 30, 1971: 30, 1974: 30, 1976: 30,
+    1979: 30, 1982: 30, 1984: 30, 1987: 30, 1990: 30, 1993: 30, 1995: 30,
+    1998: 29, 2001: 30, 2004: 30, 2006: 29, 2009: 30, 2012: 30, 2014: 30,
+    2017: 30, 2020: 30, 2023: 30, 2025: 30, 2028: 30, 2031: 30, 2033: 30,
+  };
+
+  /// 특정 음력 연도의 윤달 월 번호 반환 (윤달이 없으면 null)
+  static int? leapMonthOfYear(int lunarYear) => _leapMonthOfYear[lunarYear];
+
+  static int _daysInSolarYear(int y) =>
+      ((y % 4 == 0 && y % 100 != 0) || (y % 400 == 0)) ? 366 : 365;
+
+  /// 특정 음력 연·월(평달 또는 윤달)의 실제 최대 일수(29일 소월 / 30일 대월) 반환
+  static int maxDaysInLunarMonth(
+    int lunarYear,
+    int lunarMonth, {
+    bool isLeapMonth = false,
+  }) {
     final offsets = _monthStartOffsets[lunarYear];
-    if (offsets == null || lunarMonth < 1 || lunarMonth > 12 || lunarDay < 1 || lunarDay > 30) {
+    if (offsets == null || lunarMonth < 1 || lunarMonth > 12) return 30;
+
+    final startOffset = offsets[lunarMonth - 1];
+    int nextMonthOffset;
+    if (lunarMonth < 12) {
+      nextMonthOffset = offsets[lunarMonth];
+    } else {
+      final nextYearOffsets = _monthStartOffsets[lunarYear + 1];
+      nextMonthOffset = nextYearOffsets != null
+          ? _daysInSolarYear(lunarYear) + nextYearOffsets[0]
+          : startOffset + 30;
+    }
+
+    final totalSpan = nextMonthOffset - startOffset;
+    final hasLeapHere = _leapMonthOfYear[lunarYear] == lunarMonth;
+    if (!hasLeapHere) {
+      return totalSpan.clamp(29, 30);
+    }
+
+    final regDays = (_regDaysBeforeLeap[lunarYear] ?? 30).clamp(29, 30);
+    if (!isLeapMonth) {
+      return regDays;
+    } else {
+      return (totalSpan - regDays).clamp(29, 30);
+    }
+  }
+
+  /// 음력 생년월일(평달 및 윤달 모두 지원)을 양력 DateTime으로 정밀 변환
+  static LunarConversionResult? toSolar(
+    int lunarYear,
+    int lunarMonth,
+    int lunarDay, {
+    bool isLeapMonth = false,
+  }) {
+    final offsets = _monthStartOffsets[lunarYear];
+    if (offsets == null ||
+        lunarMonth < 1 ||
+        lunarMonth > 12 ||
+        lunarDay < 1 ||
+        lunarDay > 31) {
       return null;
     }
-    final offsetDays = offsets[lunarMonth - 1] + (lunarDay - 1);
-    final solarUtc = DateTime.utc(lunarYear, 1, 1).add(Duration(days: offsetDays));
+
     final hasLeap = _leapMonthOfYear[lunarYear] == lunarMonth;
+    final effectiveLeap = isLeapMonth && hasLeap;
+    final maxDay = maxDaysInLunarMonth(
+      lunarYear,
+      lunarMonth,
+      isLeapMonth: effectiveLeap,
+    );
+    final clampedDay = lunarDay > maxDay ? maxDay : lunarDay;
+    final wasClamped = lunarDay > maxDay;
+
+    int baseOffset = offsets[lunarMonth - 1];
+    if (effectiveLeap) {
+      baseOffset += (_regDaysBeforeLeap[lunarYear] ?? 30);
+    }
+
+    final offsetDays = baseOffset + (clampedDay - 1);
+    final solarUtc =
+        DateTime.utc(lunarYear, 1, 1).add(Duration(days: offsetDays));
     return LunarConversionResult(
       solarDate: DateTime(solarUtc.year, solarUtc.month, solarUtc.day),
       hasLeapMonthInSameMonth: hasLeap,
+      isLeapMonthApplied: effectiveLeap,
+      wasDayClamped: wasClamped,
     );
   }
 }

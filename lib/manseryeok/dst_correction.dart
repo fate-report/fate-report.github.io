@@ -15,6 +15,7 @@ final List<DstPeriod> koreanDstPeriods = [
   DstPeriod(DateTime(1949, 4, 3), DateTime(1949, 9, 11)),
   DstPeriod(DateTime(1950, 4, 1), DateTime(1950, 9, 10)),
   DstPeriod(DateTime(1951, 5, 6), DateTime(1951, 9, 9)),
+  DstPeriod(DateTime(1954, 5, 1), DateTime(1954, 9, 5)),
   DstPeriod(DateTime(1955, 5, 5), DateTime(1955, 9, 9)),
   DstPeriod(DateTime(1956, 5, 20), DateTime(1956, 9, 30)),
   DstPeriod(DateTime(1957, 5, 5), DateTime(1957, 9, 22)),
@@ -29,7 +30,7 @@ final List<DstPeriod> koreanDstPeriods = [
 /// 해당 일시가 서머타임 기간이면 true
 bool isDst(DateTime dt) {
   for (final p in koreanDstPeriods) {
-    if (dt.isAfter(p.start) && dt.isBefore(p.end)) return true;
+    if (!dt.isBefore(p.start) && dt.isBefore(p.end)) return true;
   }
   return false;
 }

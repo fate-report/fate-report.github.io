@@ -27,17 +27,17 @@ class AiException implements Exception {
   }
 }
 
-/// AI 서비스 — K01~K10 마스터 엔진 & 4인 JEV 하네스 연동.
+/// AI 서비스 — K01~K10 마스터 엔진 & 4인 JEV 하네스(프롬프트 + 코드 사후 검증기) 연동.
 class AiService {
-  /// mock 스위치 (--dart-define=USE_MOCK=true). 기본 true.
+  /// 프로덕션에서 가짜 Mock으로 빠지지 않도록 기본값을 false로 설정 (--dart-define=USE_MOCK=true 일 때만 Mock 사용).
   static const bool useMock =
-      bool.fromEnvironment('USE_MOCK', defaultValue: true);
+      bool.fromEnvironment('USE_MOCK', defaultValue: false);
 
-  /// AI 프록시 서버 URL (--dart-define=AI_PROXY_URL=/api/analyze).
+  /// AI 프록시 서버 URL (기본값 '/api/analyze').
   static const String proxyUrl =
-      String.fromEnvironment('AI_PROXY_URL', defaultValue: '');
+      String.fromEnvironment('AI_PROXY_URL', defaultValue: '/api/analyze');
 
-  /// 일반 분석 생성 (기본/연애/반복패턴)
+  /// 일반 분석 생성 (기본/연애/반복패턴) + JEV 코드 사후 검증
   static Future<AnalysisResult> generateAnalysis({
     required UserProfile user,
     PartnerProfile? partner,
@@ -46,7 +46,7 @@ class AiService {
     required String userQuestion,
   }) async {
     if (useMock || proxyUrl.isEmpty) {
-      await Future.delayed(const Duration(milliseconds: 850));
+      await Future.delayed(const Duration(milliseconds: 500));
       return MockData.general(
         user: user,
         partner: partner,
@@ -65,21 +65,30 @@ class AiService {
     );
     final json = await _callModel(system: system, prompt: prompt);
     try {
-      return AnalysisResult.fromJson(json);
+      return AnalysisResult.fromJson(json, user: user, partner: partner);
     } catch (e) {
       throw AiException(AiErrorType.parse, '응답 해석 실패: $e');
     }
   }
 
-  /// 궁합 분석 생성. K07-R3 점수/신호등/수식근거는 CompatEngine(코드)이 100% 결정 → AI는 K09 입체 통변.
+  /// 궁합 분석 생성. K07-R3 점수/신호등/수식근거는 CompatEngine(코드)이 100% 결정하며,
+  /// 본문 내 [궁합 정량 요약] 블록 역시 코드 사후 검증기(하네스 1)가 1점의 오차도 없도록 강제 고정한다.
   static Future<CompatResult> generateCompatibility({
     required UserProfile user,
     required PartnerProfile partner,
     required CompatComputation comp,
     required String userQuestion,
   }) async {
-    if (useMock || proxyUrl.isEmpty || !comp.compatibilityAvailable) {
-      await Future.delayed(const Duration(milliseconds: 850));
+    if (!comp.compatibilityAvailable) {
+      return MockData.compat(
+        comp,
+        user: user,
+        partner: partner,
+        userQuestion: userQuestion,
+      );
+    }
+    if (useMock || proxyUrl.isEmpty) {
+      await Future.delayed(const Duration(milliseconds: 500));
       return MockData.compat(
         comp,
         user: user,
@@ -97,28 +106,92 @@ class AiService {
     );
     final json = await _callModel(system: system, prompt: prompt);
 
-    final defaultFooter =
-        '[적용 기준: K04, K06, K07-R3, K08, K09, K10 | 확신도: ${comp.hourIncluded ? 'HIGH(높음)' : 'MEDIUM(보통)'}]';
+    final rawBody = JevHarnessValidator.sanitizeText(
+      (json['briefingBody'] ?? json['finalJudgment'] ?? '').toString(),
+    );
+    final rawFinal = JevHarnessValidator.sanitizeText(
+      (json['finalJudgment'] ?? '').toString(),
+    );
+    if (rawBody.isEmpty && rawFinal.isEmpty) {
+      throw AiException(AiErrorType.parse, '궁합 브리핑 본문이 비어 있습니다.');
+    }
+
+    // 하네스 1 코드 검증: 본문 상단 [궁합 정량 요약] 블록을 코드가 계산한 comp.toK07SummaryBlock()으로 강제 잠금
+    final lockedBody = _enforceK07SummaryBlockInBriefing(
+      rawBody.isNotEmpty ? rawBody : rawFinal,
+      comp,
+    );
+
+    final shouldDowngrade = !comp.hourIncluded ||
+        user.hasUnresolvedBoundary ||
+        partner.hasUnresolvedBoundary;
+    final jevLockStr =
+        (json['jevLock'] ?? json['jevAudit'] ?? '').toString().trim();
+
+    final (_, enforcedFooter) =
+        JevHarnessValidator.enforceConfidenceAndFooter(
+      rawConf: (json['confidenceLevel'] ??
+              (comp.hourIncluded ? 'HIGH' : 'MEDIUM'))
+          .toString(),
+      rawFooter: (json['auditFooter'] ?? '').toString(),
+      appliedRules: const ['K04', 'K06', 'K07-R3', 'K08', 'K09', 'K10'],
+      shouldDowngradeToMedium: shouldDowngrade,
+      jevLock: jevLockStr,
+    );
 
     return CompatResult(
       compatibilityAvailable: true,
-      compatibilityScore: comp.compatibilityScore, // 코드 값 우선 Lock
-      signalColor: comp.signalColor.name, // 코드 값 우선 Lock
+      compatibilityScore: comp.compatibilityScore, // 코드 값 100% Lock
+      signalColor: comp.signalColor.name, // 코드 값 100% Lock
       detailedScores: comp.detailedScores,
       maxScores: comp.maxScores,
       itemFormulas: comp.itemFormulas,
-      briefingBody: (json['briefingBody'] ?? json['finalJudgment'] ?? '').toString(),
-      goodParts: _strList(json['goodParts']),
-      riskParts: _strList(json['riskParts']),
-      finalJudgment: (json['finalJudgment'] ?? '').toString(),
-      actionItems: _strList(json['actionItems']),
-      auditFooter: (json['auditFooter'] ?? defaultFooter).toString(),
+      briefingBody: lockedBody,
+      goodParts: _strList(json['goodParts'])
+          .map(JevHarnessValidator.sanitizeText)
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      riskParts: _strList(json['riskParts'])
+          .map(JevHarnessValidator.sanitizeText)
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      finalJudgment: rawFinal.isNotEmpty ? rawFinal : '두 사람의 다름을 이해하고 대화 리듬을 맞추는 것이 핵심입니다.',
+      actionItems: _strList(json['actionItems'])
+          .map(JevHarnessValidator.sanitizeText)
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      auditFooter: enforcedFooter,
       holdReason: null,
       boundaryShiftNotice: comp.boundaryShiftNotice,
+      jevLock: jevLockStr,
     );
   }
 
-  /// 꼬리 질문(후속 대화) 답변 생성 (0절 4항: 앞선 설명 반복 없이 핵심과 판단 근거에 집중)
+  /// 본문(briefingBody) 내 AI가 타이핑한 [궁합 정량 요약...] 문단을 코드 확정 블록으로 교체/삽입
+  static String _enforceK07SummaryBlockInBriefing(
+    String body,
+    CompatComputation comp,
+  ) {
+    final canonicalBlock = comp.toK07SummaryBlock().trim();
+    final paras = body
+        .split(RegExp(r'\n\s*\n'))
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+
+    if (paras.isEmpty) {
+      return canonicalBlock;
+    }
+    if (paras.first.startsWith('[궁합 정량 요약')) {
+      paras[0] = canonicalBlock;
+      return paras.join('\n\n');
+    }
+    // 다른 문단에 [궁합 정량 요약이 있으면 제거 후 최상단에 코드 확정본 배치
+    paras.removeWhere((p) => p.startsWith('[궁합 정량 요약'));
+    return '$canonicalBlock\n\n${paras.join('\n\n')}';
+  }
+
+  /// 꼬리 질문(후속 대화) 답변 생성 + JEV 코드 사후 검증
   static Future<ChatTurn> generateFollowUp({
     required UserProfile user,
     PartnerProfile? partner,
@@ -129,7 +202,7 @@ class AiService {
     required String followUpQuestion,
   }) async {
     if (useMock || proxyUrl.isEmpty) {
-      await Future.delayed(const Duration(milliseconds: 700));
+      await Future.delayed(const Duration(milliseconds: 450));
       return MockData.followUp(
         user: user,
         partner: partner,
@@ -149,15 +222,30 @@ class AiService {
       followUpQuestion: followUpQuestion,
     );
     final json = await _callModel(system: system, prompt: prompt);
-    final answer = (json['answer'] ?? json['briefingBody'] ?? '').toString();
-    final footer = (json['auditFooter'] ??
-            '[적용 기준: K04, K06, K09, K10 | 확신도: ${user.birthTimeUnknown ? 'MEDIUM(보통)' : 'HIGH(높음)'}]')
-        .toString();
+    final answer = JevHarnessValidator.sanitizeText(
+      (json['answer'] ?? json['briefingBody'] ?? '').toString(),
+    );
+    if (answer.isEmpty) {
+      throw AiException(AiErrorType.parse, '후속 질문 답변이 비어 있습니다.');
+    }
+
+    final shouldDowngrade =
+        user.birthTimeUnknown || user.hasUnresolvedBoundary;
+    final (_, enforcedFooter) =
+        JevHarnessValidator.enforceConfidenceAndFooter(
+      rawConf: (json['confidenceLevel'] ??
+              (shouldDowngrade ? 'MEDIUM' : 'HIGH'))
+          .toString(),
+      rawFooter: (json['auditFooter'] ?? '').toString(),
+      appliedRules: _strList(json['appliedKRules']),
+      shouldDowngradeToMedium: shouldDowngrade,
+      jevLock: (json['jevLock'] ?? '').toString(),
+    );
 
     return ChatTurn(
       role: 'assistant',
       text: answer,
-      auditFooter: footer,
+      auditFooter: enforcedFooter,
     );
   }
 

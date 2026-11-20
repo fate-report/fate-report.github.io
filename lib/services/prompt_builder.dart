@@ -7,16 +7,13 @@ import '../manseryeok/saju_calculator.dart';
 /// 앱 코드(SajuCalculator, CompatEngine)가 계산한 K04 확정 명식 및 K07-R3 채점표를
 /// 동적 슬롯에 고정(Lock) 주입하고, AI는 K01~K10 전수 대조 및 4인 하네스 검증을 거쳐 응답한다.
 class PromptBuilder {
-  /// 실시간 현재 날짜·세운·월운·일진 및 사용자/상대 나이 고정 잠금 블록 (2024년 과거 시점 환각 원천 차단)
+  /// 실시간 현재 날짜·세운·월운·일진 및 사용자/상대 나이 고정 잠금 블록 (KST 단일 기준 · 음력 변환 반영)
   static String buildTemporalLockBlock({
     DateTime? now,
     UserProfile? user,
     PartnerProfile? partner,
   }) {
-    final rawNow = now ?? DateTime.now();
-    final dt = rawNow.year >= 2026
-        ? rawNow
-        : DateTime(2026, rawNow.month, rawNow.day, rawNow.hour, rawNow.minute);
+    final dt = SajuCalculator.nowKst(now);
     final todaySaju = SajuCalculator.calculate(
       year: dt.year,
       month: dt.month,
@@ -25,37 +22,34 @@ class PromptBuilder {
       minute: dt.minute,
       applyLocalTime: false,
     );
-    final thisYearGanji = SajuCalculator.seunPillarOfYear(dt.year);
-    final nextYearGanji = SajuCalculator.seunPillarOfYear(dt.year + 1);
-    final prevYearGanji = SajuCalculator.seunPillarOfYear(dt.year - 1);
+    final seunYear = SajuCalculator.activeSeunYear(dt);
+    final thisYearGanji = SajuCalculator.seunPillarOfYear(seunYear);
+    final nextYearGanji = SajuCalculator.seunPillarOfYear(seunYear + 1);
+    final prevYearGanji = SajuCalculator.seunPillarOfYear(seunYear - 1);
 
     String ageLock = '';
     if (user?.birthDate != null) {
-      final b = user!.birthDate!;
-      final krAge = dt.year - b.year + 1;
-      final manAge = dt.year -
-          b.year -
-          ((dt.month < b.month || (dt.month == b.month && dt.day < b.day))
-              ? 1
-              : 0);
+      final (manAge, krAge) = SajuCalculator.calculateAges(
+        user!.birthDate!,
+        user.calendarType,
+        now: dt,
+      );
       ageLock +=
           '\n- 본인 현재 나이(${dt.year}년 기준): 만 $manAge세 (연 나이 $krAge세)';
     }
     if (partner?.partnerBirthDate != null) {
-      final pb = partner!.partnerBirthDate!;
-      final pKrAge = dt.year - pb.year + 1;
-      final pManAge = dt.year -
-          pb.year -
-          ((dt.month < pb.month || (dt.month == pb.month && dt.day < pb.day))
-              ? 1
-              : 0);
+      final (pManAge, pKrAge) = SajuCalculator.calculateAges(
+        partner!.partnerBirthDate!,
+        partner.partnerCalendarType,
+        now: dt,
+      );
       ageLock +=
           '\n- 상대 현재 나이(${dt.year}년 기준): 만 $pManAge세 (연 나이 $pKrAge세)';
     }
 
     return '''[0. 절대 시점 및 세운·월운·나이 기준 Lock (Temporal Hard Lock — 하네스 1 최우선 강제)]
-- 오늘 실시간 날짜: ${dt.year}년 ${dt.month}월 ${dt.day}일
-- '올해(현재 연도)' = ${dt.year}년 $thisYearGanji년 세운 | '작년' = ${dt.year - 1}년 $prevYearGanji년 | '내년' = ${dt.year + 1}년 $nextYearGanji년
+- 오늘 실시간 날짜(KST): ${dt.year}년 ${dt.month}월 ${dt.day}일
+- '올해(현재 연도 세운, K03 입춘 기준)' = ${dt.year}년 $thisYearGanji년 세운 | '작년' = ${dt.year - 1}년 $prevYearGanji년 | '내년' = ${dt.year + 1}년 $nextYearGanji년
 - '이번 달(현재 절기 월운, K02·K05)' = ${todaySaju.monthPillar}(${todaySaju.monthPillarHanja})월 | '오늘 일진' = ${todaySaju.dayPillar}(${todaySaju.dayPillarHanja})일$ageLock
 - [절대 금지 경고]: 사전학습 데이터의 과거 시점인 "2024년(갑진년)"이나 "2025년(을사년)"을 '올해/현재'라고 부르거나 2024년 기준으로 나이와 대운을 역산하는 행위를 절대 금지합니다. 모든 '올해/이번 달/지금' 표현은 반드시 ${dt.year}년($thisYearGanji년) 기준이어야 합니다.''';
   }
@@ -292,6 +286,24 @@ ${ps.toDetailedSlotText(gender: partner.partnerGender)}$compatFactSection
 ''';
     }
 
+    final hasPartner =
+        partner != null && (partner.partnerDayPillar?.isNotEmpty ?? false);
+    final pName = hasPartner
+        ? (partner.partnerName.trim().isEmpty
+            ? '상대분'
+            : partner.partnerName.trim())
+        : '상대분';
+
+    String defaultQuestion;
+    if (category == AnalysisCategory.love) {
+      defaultQuestion = hasPartner
+          ? '$pName이(가) 저를 어떻게 생각하고 느끼는지, 우리 두 사람 사이의 끌림과 조심할 감정 온도차, 그리고 올해 관계 흐름과 다가가는 현실 전략을 다정하게 풀어주세요.'
+          : '제 타고난 연애 기질과 나에게 정말 잘 맞는 배우자·연인의 정서적 결(K09 축3), 그리고 올해 새로운 인연·연애 타이밍 흐름(K10)을 다정하게 풀어주세요.';
+    } else {
+      defaultQuestion =
+          '$categoryName 관점에서 제 타고난 기질, 강점, 주의할 점과 올해 흐름을 다정하게 풀어주세요.';
+    }
+
     final isComparison = userQuestion.contains('vs') ||
         userQuestion.contains('비교') ||
         userQuestion.contains('중 ') ||
@@ -306,13 +318,13 @@ $temporalLock
 ${s.toDetailedSlotText(gender: user.gender)}
 $partnerBlock
 [질문 카테고리 및 사용자 실제 고민]
-- 선택 카테고리: $categoryName
-- 사용자 질문: ${userQuestion.isEmpty ? '$categoryName 관점에서 제 타고난 기질, 강점, 주의할 점과 올해 흐름을 다정하게 풀어주세요.' : userQuestion}
+- 선택 카테고리: $categoryName ${category == AnalysisCategory.love ? (hasPartner ? '(상대방 명식 포함 관계·속마음 분석)' : '(솔로/본인 중심 연애·배우자운 분석)') : ''}
+- 사용자 질문: ${userQuestion.isEmpty ? defaultQuestion : userQuestion}
 
 [필수 수행 지침 (0절~3절 & K04·K06·K09·K10 강제 게이트)]
 1. **호칭 및 첫 문장 두괄식 결론**: `$callName`으로 다정하게 부르며, **첫 문장에 질문 의도에 대한 명확한 결론부터 제시**하세요. 전문 명리 용어(일간, 십성, 지장간, 조후, 억부, 12운성 등)는 숨기고 일상 심리·대화 습관·일하는 스타일·현실 행동으로 번역하세요.
 2. **briefingBody 작성 규칙 (0절 2항 투트랙 문단 설계)**:
-   ${isComparison ? '- 비교·결정 질문이므로 유도리 있게 **굵은 소제목**과 구분점을 활용해 선택지별 차이를 한눈에 들어오게 정리하세요.' : '- 일상·운세·성향 질문이므로 **글머리 기호(•, -)나 번호 매기기(1., 2.)를 절대 쓰지 말고**, 오직 순수 문단 줄바꿈(\\n\\n)으로만 친한 전문가가 카톡으로 옆에서 조곤조곤 이야기해 주듯 풀어내세요. 화제가 바뀔 때마다(첫 문장 결론 / 이유와 내면 심리[K09 축1·축2] / 현실·연애·진로에서 나타나는 모습[K09 축3·축4] / 올해 병오년 흐름과 조심할 점·현실 조언[K10]) **2~4문장 단위로 자주 줄바꿈(\\n\\n)**하여 최소 4~5개 문단으로 깊이 있고 술술 읽히게 작성하세요.'}
+   ${isComparison ? '- 비교·결정 질문이므로 유도리 있게 **굵은 소제목**과 구분점을 활용해 선택지별 차이를 한눈에 들어오게 정리하세요.' : '- 일상·운세·성향·속마음 질문이므로 **글머리 기호(•, -)나 번호 매기기(1., 2.)를 절대 쓰지 말고**, 오직 순수 문단 줄바꿈(\n\n)으로만 친한 전문가가 카톡으로 옆에서 조곤조곤 이야기해 주듯 풀어내세요. 화제가 바뀔 때마다(첫 문장 결론 / 이유와 내면 심리[K09 축1·축2] / ${hasPartner ? "$pName의 속마음과 두 사람 관계에서 나타나는 모습[K09 축3 & K07-R3 팩트 반영]" : "현실·연애·진로에서 나타나는 모습[K09 축3·축4]"} / 올해 세운 흐름과 조심할 점·현실 조언[K10]) **2~4문장 단위로 자주 줄바꿈(\n\n)**하여 최소 4~5개 문단으로 깊이 있고 술술 읽히게 작성하세요.'}
 3. **하네스 4 확신도 판정**:
    - 출생시간 미상(`${s.hourUnknown}`)이거나 K05/K08 경계 주의사항이 있으면 `confidenceLevel`을 `"MEDIUM"` 또는 `"LOW"`로 설정하고, 시주 제외 사실이나 경계 확인 안내를 자연스럽게 덧붙이세요.
 

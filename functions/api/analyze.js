@@ -74,8 +74,12 @@ export async function onRequestPost(context) {
   }
 
   const timeAnchor = buildKstTimeAnchor();
-  const finalSystem = system ? `${timeAnchor}\n\n${system}` : timeAnchor;
-  const finalPrompt = `${timeAnchor}\n\n${prompt}`;
+  const finalSystem = system.includes('Temporal Hard Lock')
+    ? system
+    : (system ? `${timeAnchor}\n\n${system}` : timeAnchor);
+  const finalPrompt = prompt.includes('Temporal Hard Lock')
+    ? prompt
+    : `${timeAnchor}\n\n${prompt}`;
 
   const geminiBody = {
     system_instruction: { parts: [{ text: finalSystem }] },
@@ -83,9 +87,9 @@ export async function onRequestPost(context) {
     generationConfig: {
       responseMimeType: 'application/json',
       temperature: 0.65,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 8192,
       // K01~K10 전수 대조 및 4인 JEV 하네스 릴레이 검증을 수행하면서도
-      // 응답 지연을 최소화하도록 경량 추론 예산(1024)을 할당한다.
+      // 응답 지연을 최소화하도록 추론 예산(1024)을 할당한다.
       thinkingConfig: { thinkingBudget: 1024 },
     },
     safetySettings: [
@@ -140,7 +144,12 @@ export async function onRequestPost(context) {
   try {
     parsed = JSON.parse(text);
   } catch (_) {
-    const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    let cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+    }
     try {
       parsed = JSON.parse(cleaned);
     } catch (e2) {

@@ -9,7 +9,7 @@ class UserProfile {
   String userName;
   String gender; // 'male' | 'female'
   DateTime? birthDate;
-  String calendarType; // 'solar' | 'lunar' | 'unknown'
+  String calendarType; // 'solar' | 'lunar' | 'lunar_leap' | 'unknown'
   String? birthTime; // 'HH:mm' or null(모름)
   bool birthTimeUnknown;
   String? birthPlace;
@@ -43,7 +43,11 @@ class UserProfile {
     this.manualOverride = false,
   });
 
-  void applySaju(SajuResult r) {
+  bool get hasUnresolvedBoundary =>
+      !manualOverride &&
+      boundaryWarnings.any((w) => w.contains('경계') || w.contains('주의'));
+
+  void applySaju(SajuResult r, {bool isManual = false}) {
     yearPillar = r.yearPillar;
     monthPillar = r.monthPillar;
     dayPillar = r.dayPillar;
@@ -51,7 +55,7 @@ class UserProfile {
     dayMaster = r.dayMaster;
     daeunSummary = r.daeunSummary;
     boundaryWarnings = r.boundaryWarnings;
-    manualOverride = false;
+    manualOverride = isManual;
   }
 
   SajuResult toSaju() {
@@ -74,7 +78,7 @@ class UserProfile {
       dayPillarHanja: pillarToHanja(dp),
       hourPillarHanja: hp == null ? null : pillarToHanja(hp),
       daeunSummary: daeunSummary,
-      boundaryWarnings: manualOverride ? const [] : boundaryWarnings,
+      boundaryWarnings: boundaryWarnings,
     );
   }
 }
@@ -88,6 +92,7 @@ class PartnerProfile {
   String? partnerBirthTime;
   bool partnerBirthTimeUnknown;
   String? partnerBirthPlace;
+  bool partnerApplyLocalTime;
   String relationStatus;
 
   String? partnerYearPillar;
@@ -107,6 +112,7 @@ class PartnerProfile {
     this.partnerBirthTime,
     this.partnerBirthTimeUnknown = false,
     this.partnerBirthPlace,
+    this.partnerApplyLocalTime = true,
     this.relationStatus = '연애 중',
     this.partnerYearPillar,
     this.partnerMonthPillar,
@@ -118,7 +124,11 @@ class PartnerProfile {
     this.partnerManualOverride = false,
   });
 
-  void applySaju(SajuResult r) {
+  bool get hasUnresolvedBoundary =>
+      !partnerManualOverride &&
+      partnerBoundaryWarnings.any((w) => w.contains('경계') || w.contains('주의'));
+
+  void applySaju(SajuResult r, {bool isManual = false}) {
     partnerYearPillar = r.yearPillar;
     partnerMonthPillar = r.monthPillar;
     partnerDayPillar = r.dayPillar;
@@ -126,7 +136,7 @@ class PartnerProfile {
     partnerDayMaster = r.dayMaster;
     partnerDaeunSummary = r.daeunSummary;
     partnerBoundaryWarnings = r.boundaryWarnings;
-    partnerManualOverride = false;
+    partnerManualOverride = isManual;
   }
 
   SajuResult toSaju() {
@@ -149,14 +159,73 @@ class PartnerProfile {
       dayPillarHanja: pillarToHanja(dp),
       hourPillarHanja: hp == null ? null : pillarToHanja(hp),
       daeunSummary: partnerDaeunSummary,
-      boundaryWarnings:
-          partnerManualOverride ? const [] : partnerBoundaryWarnings,
+      boundaryWarnings: partnerBoundaryWarnings,
     );
   }
 }
 
 /// confidenceStatus: 'ok'(HIGH) | 'partial'(MEDIUM) | 'hold'(LOW)
 enum ConfidenceStatus { ok, partial, hold }
+
+/// 코드 레벨 4인 JEV 하네스 사후 검증기 (Post-Validator)
+class JevHarnessValidator {
+  /// 이스케이프된 줄바꿈(\\n), 마크다운 헤더(###), 과거 연도 환각('올해 2024년' 등)을 정제
+  static String sanitizeText(String raw) {
+    if (raw.isEmpty) return '';
+    final kst = SajuCalculator.nowKst();
+    final curY = kst.year;
+    final sajuY = SajuCalculator.activeSeunYear(kst);
+    final curGanji = SajuCalculator.seunPillarOfYear(sajuY);
+
+    var s = raw
+        .replaceAll(r'\n\n', '\n\n')
+        .replaceAll(r'\n', '\n')
+        .replaceAll('\r\n', '\n');
+
+    // 하네스 1: '올해 2024년(갑진년)' / '올해 2025년(을사년)' 과거 시점 오기 자동 교정
+    s = s.replaceAll(
+      RegExp(r'올해\s*\(?\s*202[45]년?\s*(갑진년|을사년)?\s*\)?'),
+      '올해($curY년 $curGanji년)',
+    );
+    s = s.replaceAll(
+      RegExp(r'202[45]년\s*올해'),
+      '$curY년 올해',
+    );
+    return s.trim();
+  }
+
+  /// 하네스 4: 시간 미상 또는 미확정 절기/자시 경계가 있을 때 확신도(Confidence)를 MEDIUM 이하로 강제 클램핑
+  static (ConfidenceStatus, String) enforceConfidenceAndFooter({
+    required String rawConf,
+    required String rawFooter,
+    required List<String> appliedRules,
+    required bool shouldDowngradeToMedium,
+    String? jevLock,
+  }) {
+    var status = _parseConfidence(rawConf);
+    if (shouldDowngradeToMedium && status == ConfidenceStatus.ok) {
+      status = ConfidenceStatus.partial;
+    }
+
+    final confLabel = switch (status) {
+      ConfidenceStatus.ok => 'HIGH(높음)',
+      ConfidenceStatus.partial => 'MEDIUM(보통)',
+      ConfidenceStatus.hold => 'LOW(낮음)',
+    };
+
+    final rulesText =
+        appliedRules.isNotEmpty ? appliedRules.join(', ') : 'K04, K06, K09, K10';
+    var footer = rawFooter.trim();
+    if (footer.isEmpty) {
+      footer = '[적용 기준: $rulesText | 확신도: $confLabel]';
+    } else if (shouldDowngradeToMedium && footer.contains('HIGH')) {
+      footer = footer
+          .replaceAll('HIGH(높음)', 'MEDIUM(보통)')
+          .replaceAll('HIGH', 'MEDIUM(보통)');
+    }
+    return (status, footer);
+  }
+}
 
 /// 일반 분석 결과 스키마 (투트랙 줄글 브리핑 + JEV 하네스 4 태그 포함)
 class AnalysisResult {
@@ -170,6 +239,7 @@ class AnalysisResult {
   final List<String> actionItems;
   final String auditFooter; // [적용 기준: K04, K09... | 확신도: HIGH(높음)]
   final String warningMessage;
+  final String jevLock; // 4인 하네스 내부 검산 로그
 
   const AnalysisResult({
     required this.resultTitle,
@@ -182,30 +252,77 @@ class AnalysisResult {
     required this.actionItems,
     this.auditFooter = '[적용 기준: K04, K06, K09, K10 | 확신도: HIGH(높음)]',
     required this.warningMessage,
+    this.jevLock = '',
   });
 
-  factory AnalysisResult.fromJson(Map<String, dynamic> j) {
+  factory AnalysisResult.fromJson(
+    Map<String, dynamic> j, {
+    UserProfile? user,
+    PartnerProfile? partner,
+  }) {
     final confStr =
         (j['confidenceLevel'] ?? j['confidenceStatus'] ?? 'HIGH').toString();
     final applied = _strList(j['appliedKRules']);
-    final defaultFooter = applied.isNotEmpty
-        ? '[적용 기준: ${applied.join(', ')} | 확신도: ${_formatConfLabel(confStr)}]'
-        : '[적용 기준: K04, K06, K09, K10 | 확신도: ${_formatConfLabel(confStr)}]';
+    final jevLockStr = (j['jevLock'] ?? j['jevAudit'] ?? '').toString().trim();
 
-    final body = (j['briefingBody'] ?? j['resultSummary'] ?? '').toString();
-    final summary = (j['resultSummary'] ?? '').toString();
+    final body = JevHarnessValidator.sanitizeText(
+      (j['briefingBody'] ?? j['resultSummary'] ?? '').toString(),
+    );
+    final summary = JevHarnessValidator.sanitizeText(
+      (j['resultSummary'] ?? '').toString(),
+    );
+    final keyPt = JevHarnessValidator.sanitizeText(
+      (j['keyPoint'] ?? '').toString(),
+    );
+
+    if (body.isEmpty && summary.isEmpty) {
+      throw const FormatException('AI 응답 본문(briefingBody)이 비어 있습니다.');
+    }
+
+    final shouldDowngrade = (user != null &&
+            (user.birthTimeUnknown || user.hasUnresolvedBoundary)) ||
+        (partner != null &&
+            partner.partnerBirthDate != null &&
+            (partner.partnerBirthTimeUnknown || partner.hasUnresolvedBoundary));
+
+    final (enforcedConf, enforcedFooter) =
+        JevHarnessValidator.enforceConfidenceAndFooter(
+      rawConf: confStr,
+      rawFooter: (j['auditFooter'] ?? '').toString(),
+      appliedRules: applied.isNotEmpty
+          ? applied
+          : const ['K04', 'K06', 'K09', 'K10'],
+      shouldDowngradeToMedium: shouldDowngrade,
+      jevLock: jevLockStr,
+    );
+
+    final goods = _strList(j['goodPoints'])
+        .map(JevHarnessValidator.sanitizeText)
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final risks = _strList(j['riskPoints'])
+        .map(JevHarnessValidator.sanitizeText)
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final actions = _strList(j['actionItems'])
+        .map(JevHarnessValidator.sanitizeText)
+        .where((s) => s.isNotEmpty)
+        .toList();
 
     return AnalysisResult(
-      resultTitle: (j['resultTitle'] ?? '사주 심층 브리핑').toString(),
+      resultTitle: JevHarnessValidator.sanitizeText(
+        (j['resultTitle'] ?? '사주 심층 브리핑').toString(),
+      ),
       resultSummary: summary.isNotEmpty ? summary : body,
       briefingBody: body.isNotEmpty ? body : summary,
-      confidenceStatus: _parseConfidence(confStr),
-      keyPoint: (j['keyPoint'] ?? '').toString(),
-      goodPoints: _strList(j['goodPoints']),
-      riskPoints: _strList(j['riskPoints']),
-      actionItems: _strList(j['actionItems']),
-      auditFooter: (j['auditFooter'] ?? defaultFooter).toString(),
+      confidenceStatus: enforcedConf,
+      keyPoint: keyPt,
+      goodPoints: goods,
+      riskPoints: risks,
+      actionItems: actions,
+      auditFooter: enforcedFooter,
       warningMessage: (j['warningMessage'] ?? AppCopy.commonNotice).toString(),
+      jevLock: jevLockStr,
     );
   }
 }
@@ -226,6 +343,7 @@ class CompatResult {
   final String auditFooter;
   final String? holdReason;
   final String? boundaryShiftNotice;
+  final String jevLock;
 
   const CompatResult({
     required this.compatibilityAvailable,
@@ -242,6 +360,7 @@ class CompatResult {
     this.auditFooter = '[적용 기준: K04, K06, K07-R3, K08, K09 | 확신도: HIGH(높음)]',
     required this.holdReason,
     this.boundaryShiftNotice,
+    this.jevLock = '',
   });
 }
 
@@ -267,13 +386,6 @@ ConfidenceStatus _parseConfidence(dynamic v) {
     return ConfidenceStatus.partial;
   }
   return ConfidenceStatus.ok;
-}
-
-String _formatConfLabel(String raw) {
-  final u = raw.toUpperCase();
-  if (u.contains('LOW') || u.contains('HOLD')) return 'LOW(낮음)';
-  if (u.contains('MEDIUM') || u.contains('PARTIAL')) return 'MEDIUM(보통)';
-  return 'HIGH(높음)';
 }
 
 List<String> _strList(dynamic v) {

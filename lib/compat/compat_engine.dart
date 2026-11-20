@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import '../manseryeok/ganzhi.dart';
 import '../manseryeok/saju_calculator.dart';
 import 'relations.dart';
 
@@ -91,11 +92,13 @@ class CompatEngine {
     if (me.dayPillar.length < 2 || partner.dayPillar.length < 2) {
       return _hold('두 사람의 확정된 년·월·일주(최소 3주 6글자) 정보가 부족하여 궁합 판정을 보류합니다.');
     }
-    if (me.yearPillar.length < 2 ||
-        me.monthPillar.length < 2 ||
-        partner.yearPillar.length < 2 ||
-        partner.monthPillar.length < 2) {
-      return _hold('년주·월주·일주(3주 6글자)가 모두 확인되어야 K07-R3 궁합을 계산할 수 있습니다.');
+    if (!isValidGanzhiPillar(me.yearPillar) ||
+        !isValidGanzhiPillar(me.monthPillar) ||
+        !isValidGanzhiPillar(me.dayPillar) ||
+        !isValidGanzhiPillar(partner.yearPillar) ||
+        !isValidGanzhiPillar(partner.monthPillar) ||
+        !isValidGanzhiPillar(partner.dayPillar)) {
+      return _hold('년주·월주·일주(3주 6글자)가 모두 유효한 60갑자로 확인되어야 K07-R3 궁합을 계산할 수 있습니다.');
     }
     if (!calendarClear) {
       return _hold('양력/음력 여부가 명확하지 않아 K08 기준에 따라 판정을 보류합니다.');
@@ -250,7 +253,7 @@ class CompatEngine {
       plusReasons.add('상호 교차 보완 보너스(+2)');
     }
 
-    final cappedPlusC = math.min(plusC, 11);
+    final cappedPlusC = math.min(plusC, 13);
     final cappedMinusC = math.max(minusC, -9);
     final scoreC = (12 + cappedPlusC + cappedMinusC).clamp(0, 25);
 

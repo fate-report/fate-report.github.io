@@ -391,14 +391,21 @@ class _ResultScreenState extends State<ResultScreen> {
       );
     }
 
-    // **굵은 소제목**이 포함된 문단 처리
+    // **굵은 소제목** 또는 ### 마크다운 소제목이 포함된 문단 처리
     final lines = para.split('\n');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: lines.map((line) {
         final trimmed = line.trim();
-        if (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length > 4) {
-          final cleanTitle = trimmed.replaceAll('**', '');
+        final isHeadingHash =
+            trimmed.startsWith('### ') || trimmed.startsWith('## ');
+        final isBoldHeading =
+            trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length > 4;
+        if (isHeadingHash || isBoldHeading) {
+          final cleanTitle = trimmed
+              .replaceFirst(RegExp(r'^#{1,4}\s*'), '')
+              .replaceAll('**', '')
+              .trim();
           return Padding(
             padding: const EdgeInsets.only(top: 4, bottom: 6),
             child: Text(
@@ -412,7 +419,9 @@ class _ResultScreenState extends State<ResultScreen> {
             ),
           );
         }
-        final cleanLine = trimmed.replaceAll('**', '');
+        final cleanLine = trimmed
+            .replaceFirst(RegExp(r'^#{1,4}\s*'), '')
+            .replaceAll('**', '');
         return Padding(
           padding: const EdgeInsets.only(bottom: 4),
           child: BodyText(cleanLine, size: 14.8),
@@ -561,7 +570,9 @@ class _ResultScreenState extends State<ResultScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          turn.text,
+                          turn.text
+                              .replaceAll(RegExp(r'^#{1,4}\s*', multiLine: true), '')
+                              .replaceAll('**', ''),
                           style: GoogleFonts.notoSansKr(
                             fontSize: 13.8,
                             fontWeight:

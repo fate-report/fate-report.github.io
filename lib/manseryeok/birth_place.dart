@@ -38,9 +38,27 @@ double longitudeOf(String? placeName) {
   return p.isNotEmpty ? p.first.longitude : 126.978;
 }
 
+/// 특정 출생일시 기준 대한민국 표준 자오선 반환
+/// - 1908.04.01 ~ 1911.12.31 및 1954.03.21 ~ 1961.08.09: 동경 127.5° (UTC+08:30)
+/// - 그 외 기간: 동경 135.0° (UTC+09:00)
+double standardMeridianForDate(DateTime? birthDate) {
+  if (birthDate == null) return koreaMeridian;
+  final d = DateTime(birthDate.year, birthDate.month, birthDate.day);
+  final p1Start = DateTime(1908, 4, 1);
+  final p1End = DateTime(1912, 1, 1);
+  final p2Start = DateTime(1954, 3, 21);
+  final p2End = DateTime(1961, 8, 10);
+  if ((!d.isBefore(p1Start) && d.isBefore(p1End)) ||
+      (!d.isBefore(p2Start) && d.isBefore(p2End))) {
+    return 127.5;
+  }
+  return koreaMeridian;
+}
+
 /// 진태양시 보정 분(minute). 경도 1도당 4분.
-/// (실제경도 - 표준자오선) * 4 → 보통 음수(한국은 135보다 서쪽이라 시계를 늦춤)
-double trueSolarOffsetMinutes(String? placeName) {
+/// (실제경도 - 당시 표준자오선) * 4 → 보통 음수(한국은 135보다 서쪽이라 시계를 늦춤)
+double trueSolarOffsetMinutes(String? placeName, {DateTime? birthDate}) {
   final lon = longitudeOf(placeName);
-  return (lon - koreaMeridian) * 4.0;
+  final meridian = standardMeridianForDate(birthDate);
+  return (lon - meridian) * 4.0;
 }
