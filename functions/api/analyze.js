@@ -1,18 +1,17 @@
-// Cloudflare Pages Function — AI 프록시 (앱 → 여기 → Gemini 무료 최상위 모델 자동 폴백 체인)
-// 앱에서 { system, prompt } 를 받아 2026년 기준 무료 티어 최상위 Gemini 모델을 우선 호출하고,
-// 할당량(429)·일시 장애(503)·미지원(404/400) 시 자동으로 다음 무료 모델로 폴백한다.
-// API 키는 서버 환경변수(GEMINI_API_KEY)에만 존재.
+// Cloudflare Pages Function — AI 프록시 (앱 → 여기 → Gemini 자동 폴백 체인)
+// 앱에서 { system, prompt } 를 받아 최적의 무료 Gemini 모델 체인을 순회 호출하고
+// 순수 JSON 결과만 돌려준다. API 키는 서버 환경변수(GEMINI_API_KEY)에만 존재.
 //
 // 경로: POST /api/analyze
 
-const FREE_MODEL_CHAIN = [
-  'gemini-4-hydrogen',
-  'gemini-3.8-flash',
-  'gemini-3.5-flash-lite',
+const GEMINI_FALLBACK_MODELS = [
   'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-3.5-flash-lite',
+  'gemini-3-flash-preview',
 ];
 
-function endpointFor(model) {
+function geminiEndpoint(model) {
   return `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 }
 
@@ -50,10 +49,10 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-function json(obj, status = 200, extraHeaders = {}) {
+function json(obj, status = 200) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS, ...extraHeaders },
+    headers: { 'Content-Type': 'application/json', ...CORS },
   });
 }
 
@@ -89,93 +88,80 @@ export async function onRequestPost(context) {
     ? prompt
     : `${timeAnchor}\n\n${prompt}`;
 
-  const customModel = (env.GEMINI_MODEL || '').toString().trim();
-  const candidates = customModel
-    ? [customModel, ...FREE_MODEL_CHAIN.filter((m) => m !== customModel)]
-    : FREE_MODEL_CHAIN;
-
-  const baseBody = {
-    system_instruction: { parts: [{ text: finalSystem }] },
-    contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
-    generationConfig: {
+  function buildGeminiPayload(useThinking) {
+    const genCfg = {
       responseMimeType: 'application/json',
       temperature: 0.65,
       maxOutputTokens: 8192,
-    },
-    safetySettings: [
-      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
-      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
-    ],
-  };
+    };
+    if (useThinking) {
+      // K01~K10 전수 대조 및 4인 JEV 하네스 릴레이 검증을 수행하면서도
+      // 응답 지연을 최소화하도록 추론 예산(1024)을 할당한다.
+      genCfg.thinkingConfig = { thinkingBudget: 1024 };
+    }
+    return {
+      system_instruction: { parts: [{ text: finalSystem }] },
+      contents: [{ role: 'user', parts: [{ text: finalPrompt }] }],
+      generationConfig: genCfg,
+      safetySettings: [
+        { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+        { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+      ],
+    };
+  }
 
+  let resp = null;
   let lastStatus = 502;
   let lastDetail = '';
-  let usedModel = candidates[0];
-  let data = null;
 
-  for (const model of candidates) {
-    usedModel = model;
-    const reqBody = {
-      ...baseBody,
-      generationConfig: model.startsWith('gemini-2.5')
-        ? { ...baseBody.generationConfig, thinkingConfig: { thinkingBudget: 0 } }
-        : baseBody.generationConfig,
-    };
-
-    let resp;
+  for (const model of GEMINI_FALLBACK_MODELS) {
+    const supportsThinking = !model.includes('lite');
     try {
-      resp = await fetch(endpointFor(model), {
+      resp = await fetch(geminiEndpoint(model), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-goog-api-key': apiKey,
         },
-        body: JSON.stringify(reqBody),
+        body: JSON.stringify(buildGeminiPayload(supportsThinking)),
       });
-    } catch (e) {
-      lastStatus = 502;
-      lastDetail = `network error on ${model}`;
-      continue;
-    }
-
-    if (resp.status === 402 || resp.status === 403) {
-      return json({ error: 'credit', message: '크레딧/권한 문제' }, 402);
-    }
-
-    if (!resp.ok) {
-      lastStatus = resp.status;
-      try {
-        lastDetail = (await resp.text()).slice(0, 300);
-      } catch (_) {
-        lastDetail = '';
-      }
-      // 400/404(모델 미지원), 429(무료 한도 초과), 5xx(일시 과부하) 시 다음 무료 모델로 자동 폴백
-      if ([400, 404, 429, 500, 502, 503, 504].includes(resp.status)) {
-        continue;
-      }
-      return json({ error: 'upstream', message: `Gemini ${resp.status}`, detail: lastDetail }, 502);
-    }
-
-    try {
-      data = await resp.json();
-      break;
     } catch (_) {
       lastStatus = 502;
-      lastDetail = `invalid JSON envelope from ${model}`;
       continue;
     }
+
+    // 429(한도 초과) / 404(모델 지원 종료) / 503(일시 과부하) 시 다음 무료 모델로 자동 폴백
+    if (resp.status === 429 || resp.status === 404 || resp.status === 503 || resp.status === 500) {
+      lastStatus = resp.status;
+      lastDetail = await resp.text().catch(() => '');
+      resp = null;
+      continue;
+    }
+    break;
   }
 
-  if (!data) {
+  if (!resp) {
     if (lastStatus === 429) {
-      return json({ error: 'rate_limit', message: '요청 과다 (전체 무료 모델 한도 도달)' }, 429);
+      return json({ error: 'rate_limit', message: '무료 모델 전체 요청 한도 초과' }, 429);
     }
-    return json(
-      { error: 'upstream', message: `Gemini ${lastStatus}`, detail: lastDetail },
-      502,
-    );
+    return json({ error: 'upstream', message: `Gemini ${lastStatus}`, detail: lastDetail.slice(0, 300) }, 502);
+  }
+
+  if (resp.status === 402 || resp.status === 403) {
+    return json({ error: 'credit', message: '크레딧/권한 문제' }, 402);
+  }
+  if (!resp.ok) {
+    const t = await resp.text();
+    return json({ error: 'upstream', message: `Gemini ${resp.status}`, detail: t.slice(0, 300) }, 502);
+  }
+
+  let data;
+  try {
+    data = await resp.json();
+  } catch (_) {
+    return json({ error: 'parse', message: '응답 파싱 실패' }, 502);
   }
 
   // thinking 토큰(thought: true)을 제외한 실제 출력 텍스트 파트 추출
@@ -203,5 +189,5 @@ export async function onRequestPost(context) {
     }
   }
 
-  return json(parsed, 200, { 'X-Fate-Model': usedModel });
+  return json(parsed, 200);
 }
