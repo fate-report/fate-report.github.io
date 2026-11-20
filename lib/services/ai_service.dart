@@ -116,10 +116,12 @@ class AiService {
       throw AiException(AiErrorType.parse, '궁합 브리핑 본문이 비어 있습니다.');
     }
 
-    // 하네스 1 코드 검증: 본문 상단 [궁합 정량 요약] 블록을 코드가 계산한 comp.toK07SummaryBlock()으로 강제 잠금
+    // 하네스 1 코드 검증: 본문 내 [궁합 정량 요약] 블록이 있으면 코드가 계산한 comp.toK07SummaryBlock()으로 잠그고,
+    // 자유 질문이 있을 때는 첫 문단이 질문에 대한 직답으로 바로 시작되도록 보장한다.
     final lockedBody = _enforceK07SummaryBlockInBriefing(
       rawBody.isNotEmpty ? rawBody : rawFinal,
       comp,
+      hasCustomQuestion: userQuestion.trim().isNotEmpty,
     );
 
     final shouldDowngrade = !comp.hourIncluded ||
@@ -182,8 +184,9 @@ class AiService {
   /// 본문(briefingBody) 내 AI가 타이핑한 [궁합 정량 요약...] 문단을 코드 확정 블록으로 교체/삽입
   static String _enforceK07SummaryBlockInBriefing(
     String body,
-    CompatComputation comp,
-  ) {
+    CompatComputation comp, {
+    bool hasCustomQuestion = false,
+  }) {
     final canonicalBlock = comp.toK07SummaryBlock().trim();
     final paras = body
         .split(RegExp(r'\n\s*\n'))
@@ -194,12 +197,23 @@ class AiService {
     if (paras.isEmpty) {
       return canonicalBlock;
     }
-    if (paras.first.startsWith('[궁합 정량 요약')) {
-      paras[0] = canonicalBlock;
+    // 이미 [궁합 정량 요약 블록이 들어 있다면 해당 문단을 코드 확정본으로 교체
+    final existingIdx =
+        paras.indexWhere((p) => p.startsWith('[궁합 정량 요약'));
+    if (existingIdx != -1) {
+      if (hasCustomQuestion && existingIdx == 0 && paras.length > 1) {
+        // 자유 질문일 때는 첫 번째 직답 문단이 먼저 나오고 그 뒤에 정량 요약이 오도록 순서 조정
+        paras.removeAt(0);
+        return '${paras.first}\n\n$canonicalBlock${paras.length > 1 ? "\n\n${paras.sublist(1).join('\n\n')}" : ""}';
+      }
+      paras[existingIdx] = canonicalBlock;
       return paras.join('\n\n');
     }
-    // 다른 문단에 [궁합 정량 요약이 있으면 제거 후 최상단에 코드 확정본 배치
-    paras.removeWhere((p) => p.startsWith('[궁합 정량 요약'));
+    if (hasCustomQuestion) {
+      // 자유 질문일 때는 상단 카드(_scoreCard, _detailScoresCard)에 이미 점수표가 있으므로
+      // 본문은 곧바로 질문 직답으로 시작하게 유지
+      return paras.join('\n\n');
+    }
     return '$canonicalBlock\n\n${paras.join('\n\n')}';
   }
 

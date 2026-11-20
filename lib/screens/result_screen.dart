@@ -248,42 +248,94 @@ class _ResultScreenState extends State<ResultScreen> {
     );
   }
 
-  Widget _userQuestionBanner() {
+  Widget _userQuestionBanner({String? directAnswer}) {
     final q = widget.userQuestion.trim();
     if (q.isEmpty) return const SizedBox.shrink();
+    final ans = (directAnswer ?? '').trim().replaceAll('**', '');
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: AppColors.gold.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.gold.withValues(alpha: 0.45)),
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: AppColors.gold.withValues(alpha: 0.55),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.gold.withValues(alpha: 0.08),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Q.',
-              style: GoogleFonts.notoSerifKr(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.gold.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(8),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
               child: Text(
-                q,
+                'Q. 나의 질문',
                 style: GoogleFonts.notoSansKr(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
-                  height: 1.45,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accent,
                 ),
               ),
             ),
+            const SizedBox(height: 10),
+            Text(
+              '“$q”',
+              style: GoogleFonts.notoSerifKr(
+                fontSize: 17.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+                height: 1.48,
+              ),
+            ),
+            if (ans.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: AppColors.gold.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'A.',
+                      style: GoogleFonts.notoSerifKr(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        ans,
+                        style: GoogleFonts.notoSerifKr(
+                          fontSize: 15.2,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                          height: 1.48,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -368,7 +420,7 @@ class _ResultScreenState extends State<ResultScreen> {
     }
     return Column(
       children: [
-        _userQuestionBanner(),
+        _userQuestionBanner(directAnswer: r.finalJudgment),
         _scoreCard(r),
         const SizedBox(height: 12),
         _detailScoresCard(r),
@@ -452,16 +504,75 @@ class _ResultScreenState extends State<ResultScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          ...paragraphs.map((para) => Padding(
+          ...paragraphs.asMap().entries.map((entry) => Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: _renderParagraph(para),
+                child: _renderParagraph(
+                  entry.value,
+                  isLeadParagraph: entry.key == 0,
+                ),
               )),
         ],
       ),
     );
   }
 
-  Widget _renderParagraph(String para) {
+  /// 문장 내 **강조 구절**을 파싱하여 굵은 폰트 + 따뜻한 골드 형광펜 하이라이트 배경으로 렌더링
+  Widget _buildHighlightedRichText(
+    String rawLine, {
+    double fontSize = 14.8,
+    bool isLead = false,
+  }) {
+    final baseStyle = isLead
+        ? GoogleFonts.notoSerifKr(
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
+            color: AppColors.primary,
+            height: 1.62,
+          )
+        : GoogleFonts.notoSansKr(
+            fontSize: fontSize,
+            fontWeight: FontWeight.w400,
+            color: AppColors.primary,
+            height: 1.65,
+          );
+
+    final highlightStyle = GoogleFonts.notoSerifKr(
+      fontSize: isLead ? 15.8 : fontSize + 0.3,
+      fontWeight: FontWeight.w700,
+      color: AppColors.primary,
+      backgroundColor: AppColors.gold.withValues(alpha: 0.22),
+      height: 1.62,
+    );
+
+    final spans = <TextSpan>[];
+    final regex = RegExp(r'\*\*(.+?)\*\*');
+    int lastEnd = 0;
+    for (final match in regex.allMatches(rawLine)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(
+          text: rawLine.substring(lastEnd, match.start),
+          style: baseStyle,
+        ));
+      }
+      spans.add(TextSpan(
+        text: match.group(1),
+        style: highlightStyle,
+      ));
+      lastEnd = match.end;
+    }
+    if (lastEnd < rawLine.length) {
+      spans.add(TextSpan(
+        text: rawLine.substring(lastEnd).replaceAll('**', ''),
+        style: baseStyle,
+      ));
+    }
+
+    return RichText(
+      text: TextSpan(children: spans),
+    );
+  }
+
+  Widget _renderParagraph(String para, {bool isLeadParagraph = false}) {
     // [궁합 정량 요약: ...] 블록은 강조 박스로 렌더링
     if (para.startsWith('[궁합 정량 요약')) {
       return Container(
@@ -486,14 +597,16 @@ class _ResultScreenState extends State<ResultScreen> {
 
     // **굵은 소제목** 또는 ### 마크다운 소제목이 포함된 문단 처리
     final lines = para.split('\n');
-    return Column(
+    final contentColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: lines.map((line) {
         final trimmed = line.trim();
         final isHeadingHash =
             trimmed.startsWith('### ') || trimmed.startsWith('## ');
-        final isBoldHeading =
-            trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length > 4;
+        final isBoldHeading = trimmed.startsWith('**') &&
+            trimmed.endsWith('**') &&
+            trimmed.length > 4 &&
+            !trimmed.substring(2, trimmed.length - 2).contains('**');
         if (isHeadingHash || isBoldHeading) {
           final cleanTitle = trimmed
               .replaceFirst(RegExp(r'^#{1,4}\s*'), '')
@@ -504,23 +617,38 @@ class _ResultScreenState extends State<ResultScreen> {
             child: Text(
               cleanTitle,
               style: GoogleFonts.notoSerifKr(
-                fontSize: 15.5,
+                fontSize: 15.8,
                 fontWeight: FontWeight.w700,
                 color: AppColors.accent,
-                height: 1.4,
+                height: 1.42,
               ),
             ),
           );
         }
-        final cleanLine = trimmed
-            .replaceFirst(RegExp(r'^#{1,4}\s*'), '')
-            .replaceAll('**', '');
+        final cleanLine = trimmed.replaceFirst(RegExp(r'^#{1,4}\s*'), '');
         return Padding(
           padding: const EdgeInsets.only(bottom: 4),
-          child: BodyText(cleanLine, size: 14.8),
+          child: _buildHighlightedRichText(
+            cleanLine,
+            fontSize: 14.8,
+            isLead: isLeadParagraph,
+          ),
         );
       }).toList(),
     );
+
+    if (isLeadParagraph) {
+      return Container(
+        padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
+        decoration: const BoxDecoration(
+          border: Border(
+            left: BorderSide(color: AppColors.gold, width: 3.5),
+          ),
+        ),
+        child: contentColumn,
+      );
+    }
+    return contentColumn;
   }
 
   /// 하네스 4 종료 태그 배지 ([적용 기준: K04, K09... | 확신도: HIGH])
@@ -662,18 +790,21 @@ class _ResultScreenState extends State<ResultScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          turn.text
-                              .replaceAll(RegExp(r'^#{1,4}\s*', multiLine: true), '')
-                              .replaceAll('**', ''),
-                          style: GoogleFonts.notoSansKr(
-                            fontSize: 13.8,
-                            fontWeight:
-                                isUser ? FontWeight.w600 : FontWeight.w400,
-                            color: AppColors.primary,
-                            height: 1.55,
-                          ),
-                        ),
+                        isUser
+                            ? Text(
+                                turn.text,
+                                style: GoogleFonts.notoSansKr(
+                                  fontSize: 13.8,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                  height: 1.55,
+                                ),
+                              )
+                            : _buildHighlightedRichText(
+                                turn.text.replaceAll(
+                                    RegExp(r'^#{1,4}\s*', multiLine: true), ''),
+                                fontSize: 13.8,
+                              ),
                         if (turn.auditFooter != null &&
                             turn.auditFooter!.isNotEmpty) ...[
                           const SizedBox(height: 8),

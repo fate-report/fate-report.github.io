@@ -1382,20 +1382,63 @@ class _StepQuestion extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         SoftCard(
-          padding: const EdgeInsets.all(8),
-          child: TextField(
-            controller: controller,
-            maxLines: 5,
-            decoration: InputDecoration(
-              hintText: '고민을 자유롭게 적어주세요. (예: 올해 이직할지 내년이 나을지 비교해줘 / 우리 궁합 어때?)',
-              hintStyle:
-                  AppTheme.sans(size: 14, color: AppColors.mutedForeground),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.all(14),
-            ),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.auto_awesome,
+                      size: 16, color: AppColors.gold),
+                  const SizedBox(width: 6),
+                  Text(
+                    '나의 핵심 질문 (자유롭게 적어주세요)',
+                    style: AppTheme.sans(
+                      size: 12.5,
+                      weight: FontWeight.w700,
+                      color: AppColors.accent,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: controller,
+                maxLines: 5,
+                style: AppTheme.serif(
+                  size: 16.5,
+                  weight: FontWeight.w600,
+                  color: AppColors.primary,
+                  height: 1.55,
+                ),
+                decoration: InputDecoration(
+                  hintText:
+                      '고민을 자유롭게 적어주세요.\n(예: 그 사람이 왜 연락을 피할까요? 먼저 연락할까요? / 올해 10월에 이직해도 될까요?)',
+                  hintStyle: AppTheme.sans(
+                    size: 14,
+                    color: AppColors.mutedForeground,
+                    height: 1.5,
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 8,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),
+        Text(
+          '💡 예시 질문을 터치하면 바로 입력됩니다',
+          style: AppTheme.sans(
+            size: 12.5,
+            weight: FontWeight.w700,
+            color: AppColors.accent,
+          ),
+        ),
+        const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -1405,18 +1448,20 @@ class _StepQuestion extends StatelessWidget {
               onTap: () => controller.text = ex,
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                    const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                 decoration: BoxDecoration(
                   color: AppColors.card,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.muted, width: 1.2),
+                  border: Border.all(
+                      color: AppColors.gold.withValues(alpha: 0.45),
+                      width: 1.2),
                 ),
                 child: Text(ex,
                     style: AppTheme.sans(
-                        size: 12.5,
-                        color: AppColors.accent,
-                        weight: FontWeight.w500,
-                        height: 1)),
+                        size: 13.5,
+                        color: AppColors.primary,
+                        weight: FontWeight.w600,
+                        height: 1.35)),
               ),
             );
           }).toList(),

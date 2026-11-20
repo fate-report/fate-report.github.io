@@ -82,6 +82,7 @@ class SajuResult {
     final sajuYear = SajuCalculator.activeSeunYear(kst);
     final thisYearGanji = SajuCalculator.seunPillarOfYear(sajuYear);
     final nextYearGanji = SajuCalculator.seunPillarOfYear(sajuYear + 1);
+    final pinpointFacts = _buildPinpointTargetFacts(kst.year, dm);
 
     return '''
 - 확정 4주: $yearPillar($yearPillarHanja)년 $monthPillar($monthPillarHanja)월 $dayPillar($dayPillarHanja)일 ${hourUnknown || hourPillar == null ? '(시간 미상 — 3주 6글자 기준)' : '$hourPillar($hourPillarHanja)시'} (기준 일간: $dm / ${stemElements[dm] ?? ''})
@@ -91,8 +92,90 @@ class SajuResult {
   • ${describePillar('시주', hourUnknown ? null : hourPillar)}
 - 3주 6글자 본기 오행 분포(시주·지장간 제외, K07-R3 기준): $elText
 - 대운 흐름(K04): ${daeunSummary.isEmpty ? '(미산출)' : daeunSummary}
+- [🎯 원국·세운·월운 핵심 타격점 요약 (질문 직답용 정량 근거)]:
+$pinpointFacts
 - K05/K08 경계 점검: $warnText
 - [시간 기준점 락 (K03·K10)]: 현재 연도(올해)는 ${kst.year}년($thisYearGanji년 세운)이며, 내년은 ${kst.year + 1}년($nextYearGanji년 세운)입니다.''';
+  }
+
+  String _buildPinpointTargetFacts(int curYear, String dm) {
+    const harmonyMap = {
+      '자': '축', '축': '자', '인': '해', '해': '인', '묘': '술', '술': '묘',
+      '진': '유', '유': '진', '사': '신', '신': '사', '오': '미', '미': '오',
+    };
+    const clashMap = {
+      '자': '오', '오': '자', '축': '미', '미': '축', '인': '신', '신': '인',
+      '묘': '유', '유': '묘', '진': '술', '술': '진', '사': '해', '해': '사',
+    };
+
+    final mBr = monthPillar.length >= 2 ? monthPillar[1] : '';
+    final dBr = dayPillar.length >= 2 ? dayPillar[1] : '';
+
+    // 1) 십성 5그룹 분포 산출 (천간 + 지지 본기)
+    final groupCounts = <String, int>{
+      '비겁(자존심·주체성·경쟁)': 0,
+      '식상(표현력·실행·수익창출)': 0,
+      '재성(현실감각·재물·결과)': 0,
+      '관성(직장·책임·명예·규율)': 0,
+      '인성(문서·계약·학업·수용력)': 0,
+    };
+    void addTenGodCount(String tg) {
+      if (tg == '비견' || tg == '겁재') {
+        groupCounts['비겁(자존심·주체성·경쟁)'] = groupCounts['비겁(자존심·주체성·경쟁)']! + 1;
+      } else if (tg == '식신' || tg == '상관') {
+        groupCounts['식상(표현력·실행·수익창출)'] = groupCounts['식상(표현력·실행·수익창출)']! + 1;
+      } else if (tg == '편재' || tg == '정재') {
+        groupCounts['재성(현실감각·재물·결과)'] = groupCounts['재성(현실감각·재물·결과)']! + 1;
+      } else if (tg == '편관' || tg == '정관') {
+        groupCounts['관성(직장·책임·명예·규율)'] = groupCounts['관성(직장·책임·명예·규율)']! + 1;
+      } else if (tg == '편인' || tg == '정인') {
+        groupCounts['인성(문서·계약·학업·수용력)'] = groupCounts['인성(문서·계약·학업·수용력)']! + 1;
+      }
+    }
+
+    final pillars = [
+      yearPillar,
+      monthPillar,
+      dayPillar,
+      if (!hourUnknown && hourPillar != null) hourPillar!,
+    ];
+    for (int i = 0; i < pillars.length; i++) {
+      final p = pillars[i];
+      if (p.length >= 2) {
+        if (i != 2) addTenGodCount(calculateTenGod(dm, p[0]));
+        final mainHidden = (branchHiddenStems[p[1]] ?? const ['']).first;
+        if (mainHidden.isNotEmpty) addTenGodCount(calculateTenGod(dm, mainHidden));
+      }
+    }
+
+    final sortedGroups = groupCounts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final strongest = sortedGroups.first;
+    final zeroGroups = groupCounts.entries
+        .where((e) => e.value == 0)
+        .map((e) => e.key)
+        .toList();
+
+    // 2) 올해(curYear) 1~12월 중 일지(배우자·내면궁) 및 월지(직장·환경궁)와 합(유리월) / 충(변동·주의월)이 되는 달 추출
+    final goodMonths = <String>[];
+    final cautionMonths = <String>[];
+    for (int m = 1; m <= 12; m++) {
+      final mBrIdx = (m == 1) ? 11 : (m - 2);
+      final targetBranch = SolarTerms.monthBranchOrder[mBrIdx];
+      if (harmonyMap[dBr] == targetBranch) {
+        goodMonths.add('$m월($targetBranch월·일지합:연애/합의/성사 유리)');
+      } else if (harmonyMap[mBr] == targetBranch) {
+        goodMonths.add('$m월($targetBranch월·월지합:직장/문서/안정 유리)');
+      }
+      if (clashMap[dBr] == targetBranch) {
+        cautionMonths.add('$m월($targetBranch월·일지충:관계갈등/감정기복/변동 주의)');
+      } else if (clashMap[mBr] == targetBranch) {
+        cautionMonths.add('$m월($targetBranch월·월지충:이직/환경변화/이동수)');
+      }
+    }
+
+    return '''  • 핵심 무기 십성: ${strongest.key}(${strongest.value}개) | 보완 필요(0개) 영역: ${zeroGroups.isEmpty ? '오행·십성 고름' : zeroGroups.join(', ')}
+  • 올해($curYear년) 결정적 타이밍 월: [성사·합의·안정 유리월: ${goodMonths.isEmpty ? '평온' : goodMonths.join(', ')}] / [변동·이동·충돌 주의월: ${cautionMonths.isEmpty ? '큰 충돌 없음' : cautionMonths.join(', ')}]''';
   }
 }
 
