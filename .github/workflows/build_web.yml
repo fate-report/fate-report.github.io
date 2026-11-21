@@ -20,6 +20,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Node.js (for 4-Specialist Harness Gate)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run 4-Specialist Verification Harness Gate
+        run: node scripts/harness_verify.js
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -52,8 +60,8 @@ jobs:
       - name: Publish prebuilt Cloudflare bundle to cloudflare-dist branch
         run: |
           rm -rf /tmp/cf_dist
-          mkdir -p /tmp/cf_dist
-          cp -r build/web/* /tmp/cf_dist/
+          mkdir -p /tmp/cf_dist/public
+          cp -r build/web/* /tmp/cf_dist/public/
           cp -r functions /tmp/cf_dist/functions
           cd /tmp/cf_dist
           git init
@@ -61,7 +69,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b cloudflare-dist
           git add -A
-          git commit -m "chore: build latest Fate Report web bundle for Cloudflare Pages"
+          git commit -m "chore: build latest Fate Report web bundle (public/ + functions/) for Cloudflare Pages"
           git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" cloudflare-dist:cloudflare-dist --force
 
       - name: Build Flutter Web (GitHub Pages Mirror)

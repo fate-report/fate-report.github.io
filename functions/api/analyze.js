@@ -5,14 +5,18 @@
 //
 // 경로: POST /api/analyze
 
+const PROXY_VERSION = 'v2-fallback-5models';
+
 const DEFAULT_GEMINI_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
   'gemini-3.1-flash-lite',
   'gemini-3.8-flash',
+  'gemini-2.0-flash',
 ];
 
 const DEFAULT_OPENROUTER_MODEL = 'qwen/qwen3-235b-a22b:free';
+const MODEL_TIMEOUT_MS = 22000;
 
 const STEMS = ['갑', '을', '병', '정', '무', '기', '경', '신', '임', '계'];
 const STEMS_HANJA = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
@@ -44,14 +48,20 @@ function buildKstTimeAnchor() {
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Expose-Headers': 'X-Fate-Model, X-Fate-Proxy-Version',
 };
 
 function json(obj, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json', ...CORS, ...extraHeaders },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Fate-Proxy-Version': PROXY_VERSION,
+      ...CORS,
+      ...extraHeaders,
+    },
   });
 }
 
@@ -108,9 +118,10 @@ async function callGeminiModel({ model, apiKey, finalSystem, finalPrompt }) {
         'x-goog-api-key': apiKey,
       },
       body: JSON.stringify(geminiBody),
+      signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
     });
   } catch (_) {
-    return { ok: false, status: 502, reason: 'network' };
+    return { ok: false, status: 502, reason: 'network_or_timeout' };
   }
 
   if (!resp.ok) {
@@ -159,9 +170,10 @@ async function callOpenRouterFallback({ apiKey, model, finalSystem, finalPrompt 
           { role: 'user', content: finalPrompt },
         ],
       }),
+      signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
     });
   } catch (_) {
-    return { ok: false, status: 502, reason: 'openrouter_network' };
+    return { ok: false, status: 502, reason: 'openrouter_network_or_timeout' };
   }
 
   if (!resp.ok) {
@@ -185,6 +197,20 @@ async function callOpenRouterFallback({ apiKey, model, finalSystem, finalPrompt 
 
 export async function onRequestOptions() {
   return new Response(null, { status: 204, headers: CORS });
+}
+
+export async function onRequestGet(context) {
+  const { env } = context;
+  const modelList = env.GEMINI_MODELS
+    ? env.GEMINI_MODELS.split(',').map((m) => m.trim()).filter(Boolean)
+    : DEFAULT_GEMINI_MODELS;
+  return json({
+    ok: true,
+    version: PROXY_VERSION,
+    models: modelList,
+    hasGeminiKey: Boolean(env.GEMINI_API_KEY),
+    hasOpenRouterKey: Boolean(env.OPENROUTER_API_KEY),
+  });
 }
 
 export async function onRequestPost(context) {
