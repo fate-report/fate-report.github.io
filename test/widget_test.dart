@@ -5,6 +5,7 @@ import 'package:fate_report/content/copy.dart';
 import 'package:fate_report/manseryeok/saju_calculator.dart';
 import 'package:fate_report/manseryeok/solar_terms.dart';
 import 'package:fate_report/manseryeok/lunar_converter.dart';
+import 'package:fate_report/manseryeok/birth_place.dart';
 import 'package:fate_report/compat/compat_engine.dart';
 import 'package:fate_report/models/models.dart';
 import 'package:fate_report/services/prompt_builder.dart';
@@ -145,5 +146,37 @@ void main() {
     );
     expect(mockRes.briefingBody.isNotEmpty, true);
     expect(const FateReportApp(), isA<FateReportApp>());
+  });
+
+  test('출생지역 전국 161개 시·군 경도표·별칭 검색·진태양시 보정 검산', () {
+    expect(birthPlaces.length, 161);
+    final uniqueNames = birthPlaces.map((p) => p.name).toSet();
+    expect(uniqueNames.length, birthPlaces.length);
+
+    for (final p in birthPlaces) {
+      expect(p.longitude, inInclusiveRange(124.5, 131.5));
+      expect(birthPlaceGroups.contains(p.group), true);
+    }
+
+    // 기존 16개 도시 100% 하위 호환 및 접미사·별칭·동명 구분 검증
+    expect(findBirthPlace('서울')?.longitude, closeTo(126.978, 0.001));
+    expect(findBirthPlace('수원시')?.name, '수원');
+    expect(findBirthPlace('양구')?.name, '양구');
+    expect(findBirthPlace('양구군')?.name, '양구');
+    expect(findBirthPlace('경기 광주')?.region, '경기');
+    expect(findBirthPlace('강원 고성')?.region, '강원');
+    expect(findBirthPlace('경남 고성')?.region, '경남');
+    expect(findBirthPlace('분당')?.name, '성남');
+    expect(findBirthPlace('마산')?.name, '창원');
+    expect(findBirthPlace('성남')?.matchesQuery('판교'), true);
+
+    // 동서 경도차에 따른 진태양시 보정 순서 검증 (울릉 > 포항 > 서울 > 신안)
+    final ulleung = trueSolarOffsetMinutes('울릉');
+    final pohang = trueSolarOffsetMinutes('포항');
+    final seoul = trueSolarOffsetMinutes('서울');
+    final sinan = trueSolarOffsetMinutes('신안');
+    expect(ulleung, greaterThan(pohang));
+    expect(pohang, greaterThan(seoul));
+    expect(seoul, greaterThan(sinan));
   });
 }

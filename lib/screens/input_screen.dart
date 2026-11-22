@@ -791,6 +791,248 @@ class _PersonFormState extends State<_PersonForm> {
     );
   }
 
+  String _formatSolarOffset(int minutes) =>
+      minutes >= 0 ? '+$minutes분' : '$minutes분';
+
+  void _showBirthPlacePicker(BuildContext context) {
+    String query = '';
+    String selectedGroup = '전체';
+    final currentSelected = findBirthPlace(widget.place);
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final filtered = birthPlaces.where((p) {
+            final groupMatch =
+                selectedGroup == '전체' || p.group == selectedGroup;
+            return groupMatch && p.matchesQuery(query);
+          }).toList();
+
+          return AlertDialog(
+            backgroundColor: AppColors.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+            contentPadding: const EdgeInsets.fromLTRB(20, 6, 20, 8),
+            actionsPadding: const EdgeInsets.fromLTRB(12, 0, 16, 12),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '출생지역 선택',
+                    style: AppTheme.serif(size: 16, weight: FontWeight.w700),
+                  ),
+                ),
+                Text(
+                  '${filtered.length}개 지역',
+                  style: AppTheme.sans(
+                    size: 12,
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 360,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    decoration: _dec(
+                      '시·군 검색 (예: 용인, 천안, 마산, 분당)',
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        size: 18,
+                        color: AppColors.gold,
+                      ),
+                    ),
+                    onChanged: (v) => setDialogState(() => query = v),
+                  ),
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: birthPlaceGroups.map((g) {
+                        final active = g == selectedGroup;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: () =>
+                                setDialogState(() => selectedGroup = g),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: active
+                                    ? AppColors.primary
+                                    : AppColors.muted,
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: Text(
+                                g,
+                                style: AppTheme.sans(
+                                  size: 12,
+                                  weight: active
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  color: active
+                                      ? Colors.white
+                                      : AppColors.mutedForeground,
+                                  height: 1,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 300,
+                    child: filtered.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '일치하는 시·군이 없습니다.\n인근 시·군 이름으로 검색해 보세요.',
+                                  textAlign: TextAlign.center,
+                                  style: AppTheme.sans(
+                                    size: 13,
+                                    color: AppColors.mutedForeground,
+                                    height: 1.5,
+                                  ),
+                                ),
+                                if (selectedGroup != '전체') ...[
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: () => setDialogState(
+                                        () => selectedGroup = '전체'),
+                                    child: const Text('전체 지역에서 다시 찾기'),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (listCtx, idx) => const Divider(
+                              height: 1,
+                              color: AppColors.muted,
+                            ),
+                            itemBuilder: (listCtx, i) {
+                              final p = filtered[i];
+                              final isSelected =
+                                  currentSelected?.name == p.name;
+                              final offsetMin = trueSolarOffsetMinutes(
+                                p.name,
+                                birthDate: widget.date,
+                              ).round();
+                              return InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () {
+                                  widget.onPlace(p.name);
+                                  Navigator.of(ctx).pop();
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 11,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppColors.primary
+                                            .withValues(alpha: 0.08)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.muted,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          p.region,
+                                          style: AppTheme.sans(
+                                            size: 11,
+                                            weight: FontWeight.w600,
+                                            color: AppColors.mutedForeground,
+                                            height: 1.1,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          p.name,
+                                          style: AppTheme.sans(
+                                            size: 14,
+                                            weight: isSelected
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ),
+                                      Text(
+                                        '진태양시 ${_formatSolarOffset(offsetMin)}',
+                                        style: AppTheme.sans(
+                                          size: 11.5,
+                                          color: AppColors.mutedForeground,
+                                        ),
+                                      ),
+                                      if (isSelected) ...[
+                                        const SizedBox(width: 6),
+                                        const Icon(
+                                          Icons.check_circle,
+                                          size: 16,
+                                          color: AppColors.gold,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              if (widget.place != null)
+                TextButton(
+                  onPressed: () {
+                    widget.onPlace(null);
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text('선택 해제'),
+                ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('닫기'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _fieldLabel(String text) => Text(
         text,
         style: AppTheme.sans(
@@ -961,19 +1203,71 @@ class _PersonFormState extends State<_PersonForm> {
           const SizedBox(height: 12),
           _fieldLabel('출생지역'),
           const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: widget.place,
-            hint: Text('출생지역 선택',
-                style: AppTheme.sans(
-                    size: 13.5, color: AppColors.mutedForeground)),
-            decoration: _dec('출생지역 선택'),
-            items: birthPlaces
-                .map((p) => DropdownMenuItem(
-                      value: p.name,
-                      child: Text(p.name, style: AppTheme.sans(size: 14)),
-                    ))
-                .toList(),
-            onChanged: (v) => widget.onPlace(v),
+          Builder(
+            builder: (context) {
+              final selectedPlace = findBirthPlace(widget.place);
+              final rawPlace = widget.place?.trim() ?? '';
+              String placeLabel = '출생지역 선택 (전국 161개 시·군 검색)';
+              if (selectedPlace != null) {
+                final displayTitle = (selectedPlace.region ==
+                            selectedPlace.name ||
+                        selectedPlace.name
+                            .startsWith('${selectedPlace.region} '))
+                    ? selectedPlace.name
+                    : '${selectedPlace.region} · ${selectedPlace.name}';
+                final offsetMin = trueSolarOffsetMinutes(
+                  selectedPlace.name,
+                  birthDate: widget.date,
+                ).round();
+                placeLabel =
+                    '$displayTitle (진태양시 ${_formatSolarOffset(offsetMin)})';
+              } else if (rawPlace.isNotEmpty) {
+                placeLabel = rawPlace;
+              }
+              final hasPlace = rawPlace.isNotEmpty;
+              return InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _showBirthPlacePicker(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 15,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.muted,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 18,
+                        color: AppColors.gold,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          placeLabel,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTheme.sans(
+                            size: 14,
+                            color: hasPlace
+                                ? AppColors.primary
+                                : AppColors.mutedForeground,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 20,
+                        color: AppColors.mutedForeground,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 8),
           InkWell(

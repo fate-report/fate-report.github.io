@@ -94,6 +94,23 @@ function runStaticHarnesses() {
     '24절기 KST 시·분 + 127.5°/135° + 1954 포함 DST + 야자시/조자시'
   );
 
+  const bpMatches = [...bp.matchAll(/BirthPlace\('([^']+)',\s*([0-9.]+)/g)];
+  const bpNames = new Set(bpMatches.map((m) => m[1]));
+  const bpLonOk = bpMatches.every((m) => {
+    const lon = Number(m[2]);
+    return lon >= 124.5 && lon <= 131.5;
+  });
+  check(
+    '하네스 A',
+    '전국 출생지역 161개 시·군 경도표',
+    bpMatches.length === 161 &&
+      bpNames.size === 161 &&
+      bpLonOk &&
+      bp.includes('findBirthPlace') &&
+      bp.includes('matchesQuery'),
+    `${bpMatches.length}개 시·군 수록 (중복 0건, 동경 124.5~131.5° 검증, 별칭 검색 지원)`
+  );
+
   const k06Ok =
     rel.includes("'갑': '기'") &&
     rel.includes("'오': '미'") &&
