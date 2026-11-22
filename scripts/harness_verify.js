@@ -200,8 +200,9 @@ async function runLiveHarness(baseUrl) {
     const jsResp = await fetch(`${cleanBase}/main.dart.js`);
     const jsText = await jsResp.text();
     const hasNewCode =
-      jsText.includes('음력(윤달)') &&
-      jsText.includes('Q. 나의 질문') &&
+      jsText.includes('lunar_leap') &&
+      jsText.includes('briefingBody') &&
+      jsText.includes('questionCorePoint') &&
       jsText.includes('K07-R3');
     check(
       '하네스 D (라이브)',
