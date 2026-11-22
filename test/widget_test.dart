@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fate_report/main.dart';
 import 'package:fate_report/content/copy.dart';
 import 'package:fate_report/manseryeok/saju_calculator.dart';
+import 'package:fate_report/manseryeok/saju_explainer.dart';
 import 'package:fate_report/manseryeok/solar_terms.dart';
 import 'package:fate_report/manseryeok/lunar_converter.dart';
 import 'package:fate_report/manseryeok/birth_place.dart';
@@ -178,5 +179,62 @@ void main() {
     expect(ulleung, greaterThan(pohang));
     expect(pohang, greaterThan(seoul));
     expect(seoul, greaterThan(sinan));
+  });
+
+  test('STEP 2 초보자 명식 해설 엔진·4주 8글자 오행 교정·12시진 프리뷰 검산', () {
+    final fullSaju = SajuCalculator.recalculateWithManualPillars(
+      yearPillar: '임오',
+      monthPillar: '계축',
+      dayPillar: '무술',
+      hourPillar: '경신',
+      gender: 'male',
+      birthDate: DateTime(2003, 1, 15),
+    );
+    // K07-R3용 6글자 분포는 그대로 유지하고, 화면 표시용은 시주(경신 금2) 포함 8글자 반영
+    expect(fullSaju.sixCharElements['금'], 0);
+    expect(fullSaju.displayElements, {'목': 0, '화': 1, '토': 3, '금': 2, '수': 2});
+    expect(fullSaju.displayElementCharCount, 8);
+
+    final easy = SajuExplainer.explain(fullSaju, userName: '주용욱');
+    expect(easy.dayMasterBadge.contains('무토'), true);
+    expect(easy.dayMasterStory.startsWith('주용욱님은'), true);
+    expect(easy.elementScopeLabel, '4주 8글자 기준');
+    expect(easy.elementStory.contains('흙(토)(3)'), true);
+    expect(easy.elementStory.contains('나무(목)'), true);
+    expect(easy.currentDaeunBadge, isNotNull);
+    expect(easy.daeunTimeline.isNotEmpty, true);
+
+    // 시간 미상일 때는 3주 6글자 기준 자동 전환 검증
+    final noHourSaju = SajuCalculator.calculate(
+      year: 2003,
+      month: 1,
+      day: 15,
+      gender: 'male',
+    );
+    expect(noHourSaju.displayElementCharCount, 6);
+    expect(
+      SajuExplainer.explain(noHourSaju).elementScopeLabel.contains('3주 6글자'),
+      true,
+    );
+
+    // 12시진 및 진태양시 자정 경계 프리뷰 검증
+    final afternoon = SajuExplainer.describeSijin(
+      hour24: 16,
+      minute: 20,
+      placeName: '서울',
+      applyLocalTime: true,
+    );
+    expect(afternoon.sijinLabel, '신시(申時)');
+    expect(afternoon.adjustedTimeText, '15:48');
+    expect(afternoon.crossedToPrevDay, false);
+
+    final midnightWrap = SajuExplainer.describeSijin(
+      hour24: 0,
+      minute: 15,
+      placeName: '서울',
+      applyLocalTime: true,
+    );
+    expect(midnightWrap.crossedToPrevDay, true);
+    expect(midnightWrap.sijinLabel, '야자시(夜子時)');
   });
 }

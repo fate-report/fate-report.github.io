@@ -32,6 +32,8 @@ function runStaticHarnesses() {
   const pb = read('lib/services/prompt_builder.dart');
   const md = read('lib/models/models.dart');
   const ai = read('lib/services/ai_service.dart');
+  const inp = read('lib/screens/input_screen.dart');
+  const exp = read('lib/manseryeok/saju_explainer.dart');
   const rs = read('lib/screens/result_screen.dart');
   const proxy = read('functions/api/analyze.js');
   const ci = read('.github/workflows/build_web.yml');
@@ -143,6 +145,18 @@ function runStaticHarnesses() {
     'K10 월운 조견표·시점 락',
     sc.includes('buildYearlyMonthPillars') && pb.includes('buildTemporalLockBlock'),
     '올해/내년 1~12월 월운 조견표 + KST 시점 락'
+  );
+
+  check(
+    '하네스 A',
+    'STEP 1 애니메이션 휠 피커 & STEP 2 초보자 해설·8글자 오행',
+    sc.includes('displayElements') &&
+      exp.includes('class SajuExplainer') &&
+      exp.includes('describeSijin') &&
+      inp.includes('_BirthTimePickerDialog') &&
+      inp.includes('ListWheelScrollView') &&
+      inp.includes('_PillarConfirmCard'),
+    '3단 드럼 휠 시간 피커 + 실시간 12시진 프리뷰 + 4주 8글자/3주 6글자 분기 대화체 명식 해설 확인'
   );
 
   // ── [하네스 B] API·모델 폴백·환각 감시관 ──

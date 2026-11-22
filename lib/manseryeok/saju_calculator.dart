@@ -52,6 +52,23 @@ class SajuResult {
     return counts;
   }
 
+  /// 4주 8글자 본기 오행 분포 (시주가 확정된 경우 시주 천간·지지까지 포함, 시주 미상이면 3주 6글자)
+  Map<String, int> get displayElements {
+    final counts = Map<String, int>.from(sixCharElements);
+    final hp = hourPillar;
+    if (!hourUnknown && hp != null && hp.length >= 2) {
+      final sEl = stemElements[hp[0]];
+      final bEl = branchElements[hp[1]];
+      if (sEl != null) counts[sEl] = (counts[sEl] ?? 0) + 1;
+      if (bEl != null) counts[bEl] = (counts[bEl] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  /// 화면 표시용 오행 기준 총 글자 수 (시주 포함 시 8, 미상 시 6)
+  int get displayElementCharCount =>
+      (!hourUnknown && hourPillar != null && hourPillar!.length >= 2) ? 8 : 6;
+
   /// 프롬프트 K04/K09 슬롯에 주입할 상세 명식 구조 요약 생성
   String toDetailedSlotText({String gender = 'female'}) {
     if (dayPillar.length < 2) return '(명식 미확정)';

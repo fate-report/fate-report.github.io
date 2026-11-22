@@ -8,6 +8,7 @@ import '../models/models.dart';
 import '../services/app_state.dart';
 import '../manseryeok/ganzhi.dart';
 import '../manseryeok/saju_calculator.dart';
+import '../manseryeok/saju_explainer.dart';
 import '../manseryeok/birth_place.dart';
 import '../manseryeok/lunar_converter.dart';
 import 'result_screen.dart';
@@ -601,13 +602,11 @@ class _PersonForm extends StatefulWidget {
 
 class _PersonFormState extends State<_PersonForm> {
   late final TextEditingController _nameCtrl;
-  late final TextEditingController _timeCtrl;
 
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.name);
-    _timeCtrl = TextEditingController(text: widget.time ?? '');
   }
 
   @override
@@ -619,19 +618,11 @@ class _PersonFormState extends State<_PersonForm> {
         selection: TextSelection.collapsed(offset: widget.name.length),
       );
     }
-    final targetTime = widget.time ?? '';
-    if (targetTime != _timeCtrl.text) {
-      _timeCtrl.value = TextEditingValue(
-        text: targetTime,
-        selection: TextSelection.collapsed(offset: targetTime.length),
-      );
-    }
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _timeCtrl.dispose();
     super.dispose();
   }
 
@@ -793,6 +784,72 @@ class _PersonFormState extends State<_PersonForm> {
 
   String _formatSolarOffset(int minutes) =>
       minutes >= 0 ? '+$minutes분' : '$minutes분';
+
+  Future<void> _showAnimatedTimePicker(BuildContext context) async {
+    final parsed = _InputScreenState._parseTime(widget.time);
+    final initHour = parsed?.$1 ?? 12;
+    final initMin = parsed?.$2 ?? 0;
+
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '출생시간 선택 닫기',
+      barrierColor: Colors.black.withValues(alpha: 0.42),
+      transitionDuration: const Duration(milliseconds: 260),
+      pageBuilder: (ctx, anim, secondaryAnim) => _BirthTimePickerDialog(
+        initialHour24: initHour,
+        initialMinute: initMin,
+        hasExistingValue: parsed != null,
+        placeName: widget.place,
+        birthDate: widget.date,
+        applyLocalTime: widget.applyLocalTime,
+        onClear: () => widget.onTime(null),
+        onConfirm: (h24, m) {
+          final hh = h24.toString().padLeft(2, '0');
+          final mm = m.toString().padLeft(2, '0');
+          widget.onTime('$hh:$mm');
+        },
+      ),
+      transitionBuilder: (ctx, anim, secondaryAnim, child) {
+        final curved = CurvedAnimation(
+          parent: anim,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.94, end: 1.0).animate(curved),
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.04),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatDisplayTime(String? rawTime) {
+    final parsed = _InputScreenState._parseTime(rawTime);
+    if (parsed == null) return '출생시간을 선택하세요 (오전/오후 · 시 · 분)';
+    final h24 = parsed.$1;
+    final m = parsed.$2;
+    final period = h24 < 12 ? '오전' : '오후';
+    final h12 = (h24 % 12 == 0) ? 12 : (h24 % 12);
+    final mm = m.toString().padLeft(2, '0');
+    final preview = SajuExplainer.describeSijin(
+      hour24: h24,
+      minute: m,
+      placeName: widget.place,
+      birthDate: widget.date,
+      applyLocalTime: widget.applyLocalTime,
+    );
+    return '$period $h12시 $mm분 · ${preview.sijinLabel}';
+  }
 
   void _showBirthPlacePicker(BuildContext context) {
     String query = '';
@@ -1148,25 +1205,71 @@ class _PersonFormState extends State<_PersonForm> {
           const SizedBox(height: 8),
           Opacity(
             opacity: widget.timeUnknown ? 0.45 : 1,
-            child: TextField(
-              controller: _timeCtrl,
-              enabled: !widget.timeUnknown,
-              decoration: _dec(
-                '출생시간 입력 (예: 09:30 또는 1430)',
-                prefixIcon: const Icon(
-                  Icons.access_time_outlined,
-                  size: 18,
-                  color: AppColors.gold,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: widget.timeUnknown
+                  ? null
+                  : () => _showAnimatedTimePicker(context),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                decoration: BoxDecoration(
+                  color: AppColors.muted,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.access_time_outlined,
+                      size: 18,
+                      color: AppColors.gold,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        layoutBuilder: (currentChild, previousChildren) =>
+                            Stack(
+                          alignment: Alignment.centerLeft,
+                          children: [
+                            ...previousChildren,
+                            if (currentChild != null) currentChild,
+                          ],
+                        ),
+                        child: Text(
+                          widget.timeUnknown
+                              ? '출생시간 모름 (3주 6글자 기준 분석)'
+                              : _formatDisplayTime(widget.time),
+                          key: ValueKey(
+                            '${widget.timeUnknown}_${widget.time}_${widget.place}_${widget.applyLocalTime}',
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTheme.sans(
+                            size: 14,
+                            color: (!widget.timeUnknown &&
+                                    _InputScreenState._parseTime(widget.time) !=
+                                        null)
+                                ? AppColors.primary
+                                : AppColors.mutedForeground,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 20,
+                      color: AppColors.mutedForeground,
+                    ),
+                  ],
                 ),
               ),
-              keyboardType: TextInputType.datetime,
-              onChanged: (v) => widget.onTime(v.isEmpty ? null : v),
             ),
           ),
           if (invalidTime) ...[
             const SizedBox(height: 6),
             Text(
-              '※ 출생시간을 00:00~23:59 형식(예: 09:30 또는 1430)으로 입력하거나 [출생시간 모름]을 체크해 주세요.',
+              '※ 출생시간을 다시 선택하거나 [출생시간 모름]을 체크해 주세요.',
               style: AppTheme.sans(
                 size: 11.5,
                 weight: FontWeight.w600,
@@ -1433,9 +1536,9 @@ class _StepConfirm extends StatelessWidget {
           style: AppTheme.sans(size: 13.5, color: AppColors.mutedForeground),
         ),
         const SizedBox(height: 16),
-        _pillarCard(
-          context: context,
+        _PillarConfirmCard(
           title: '나의 명식 (${user.userName.isEmpty ? "본인" : user.userName})',
+          personName: user.userName,
           saju: mySaju,
           onEdit: () => _showEditDialog(
             context: context,
@@ -1463,10 +1566,10 @@ class _StepConfirm extends StatelessWidget {
         ),
         if (partner != null) ...[
           const SizedBox(height: 14),
-          _pillarCard(
-            context: context,
+          _PillarConfirmCard(
             title:
                 '상대의 명식 (${partner!.partnerName.isEmpty ? "상대" : partner!.partnerName})',
+            personName: partner!.partnerName,
             saju: partner!.toSaju(),
             onEdit: () => _showEditDialog(
               context: context,
@@ -1490,215 +1593,6 @@ class _StepConfirm extends StatelessWidget {
                 partner!.partnerBirthTimeUnknown = h.isEmpty;
                 onChanged();
               },
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _pillarCard({
-    required BuildContext context,
-    required String title,
-    required SajuResult saju,
-    required VoidCallback onEdit,
-  }) {
-    final items = [
-      ('년주', saju.yearPillar, saju.yearPillarHanja),
-      ('월주', saju.monthPillar, saju.monthPillarHanja),
-      ('일주', saju.dayPillar, saju.dayPillarHanja),
-      (
-        '시주',
-        saju.hourUnknown ? '—' : (saju.hourPillar ?? '—'),
-        saju.hourUnknown ? '' : (saju.hourPillarHanja ?? '')
-      ),
-    ];
-    final elDist = saju.sixCharElements.entries
-        .map((e) => '${e.key}${e.value}')
-        .join(' · ');
-
-    final infoLines = <String>[
-      if (saju.hourUnknown) '출생시간을 몰라 시주는 계산에서 제외했습니다 (3주 6글자 기준 분석).',
-      ...saju.boundaryWarnings,
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SoftCard(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(title,
-                        style: AppTheme.serif(
-                            size: 16,
-                            weight: FontWeight.w700,
-                            color: AppColors.primary)),
-                  ),
-                  TextButton.icon(
-                    onPressed: onEdit,
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    icon: const Icon(Icons.edit_outlined,
-                        size: 15, color: AppColors.gold),
-                    label: Text('수정',
-                        style: AppTheme.sans(
-                            size: 13,
-                            weight: FontWeight.w600,
-                            color: AppColors.gold,
-                            height: 1)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: items.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final e = entry.value;
-                  final isDay = idx == 2;
-                  return Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 14, horizontal: 4),
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: isDay ? AppColors.primary : AppColors.muted,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(e.$1,
-                              style: AppTheme.sans(
-                                  size: 11,
-                                  color: isDay
-                                      ? Colors.white70
-                                      : AppColors.mutedForeground,
-                                  height: 1.1)),
-                          const SizedBox(height: 6),
-                          Text(e.$2,
-                              style: AppTheme.serif(
-                                  size: 19,
-                                  weight: FontWeight.w700,
-                                  color: isDay
-                                      ? AppColors.goldLight
-                                      : AppColors.primary,
-                                  height: 1.2)),
-                          if (e.$3.isNotEmpty) ...[
-                            const SizedBox(height: 3),
-                            Text(e.$3,
-                                style: AppTheme.sans(
-                                    size: 11,
-                                    color: isDay
-                                        ? AppColors.goldLight
-                                            .withValues(alpha: 0.75)
-                                        : AppColors.mutedForeground,
-                                    height: 1.1)),
-                          ],
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  if (saju.dayMaster.isNotEmpty)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('일간(나를 상징): ',
-                            style: AppTheme.sans(
-                                size: 13,
-                                color: AppColors.mutedForeground,
-                                height: 1.2)),
-                        Text(
-                          '${saju.dayMaster}(${stemElements[saju.dayMaster] ?? ""})',
-                          style: AppTheme.sans(
-                              size: 14,
-                              weight: FontWeight.w700,
-                              color: AppColors.gold,
-                              height: 1.2),
-                        ),
-                      ],
-                    ),
-                  if (saju.hourUnknown)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.muted,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text('시주 판정 보류',
-                          style: AppTheme.sans(
-                              size: 11,
-                              weight: FontWeight.w600,
-                              color: AppColors.mutedForeground,
-                              height: 1.1)),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text('• 3주 6글자 본기 오행: $elDist',
-                  style: AppTheme.sans(
-                      size: 11.8, color: AppColors.mutedForeground)),
-              if (saju.daeunSummary.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text('• 대운: ${saju.daeunSummary}',
-                    style: AppTheme.sans(
-                        size: 11.8, color: AppColors.mutedForeground)),
-              ],
-            ],
-          ),
-        ),
-        if (infoLines.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.noticeBg,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.only(top: 2),
-                  child: Icon(Icons.info_outline,
-                      size: 17, color: AppColors.mutedForeground),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: infoLines
-                        .map((w) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Text(w,
-                                  style: AppTheme.sans(
-                                      size: 12,
-                                      color: AppColors.mutedForeground,
-                                      height: 1.45)),
-                            ))
-                        .toList(),
-                  ),
-                ),
-              ],
             ),
           ),
         ],
@@ -1912,5 +1806,904 @@ class _StepQuestion extends StatelessWidget {
           '이 사람과 오래 안정적으로 만나려면 어떤 대화 규칙이 필요할까요?',
         ];
     }
+  }
+}
+
+/// 애니메이션 3단 드럼 휠 출생시간 선택 다이얼로그 (실시간 12시진·진태양시 프리뷰)
+class _BirthTimePickerDialog extends StatefulWidget {
+  final int initialHour24;
+  final int initialMinute;
+  final bool hasExistingValue;
+  final String? placeName;
+  final DateTime? birthDate;
+  final bool applyLocalTime;
+  final VoidCallback onClear;
+  final void Function(int hour24, int minute) onConfirm;
+
+  const _BirthTimePickerDialog({
+    required this.initialHour24,
+    required this.initialMinute,
+    required this.hasExistingValue,
+    required this.placeName,
+    required this.birthDate,
+    required this.applyLocalTime,
+    required this.onClear,
+    required this.onConfirm,
+  });
+
+  @override
+  State<_BirthTimePickerDialog> createState() => _BirthTimePickerDialogState();
+}
+
+class _BirthTimePickerDialogState extends State<_BirthTimePickerDialog> {
+  late int _periodIdx; // 0: 오전, 1: 오후
+  late int _hour12Idx; // 0..11 -> 1시..12시
+  late int _minuteIdx; // 0..59 -> 00분..59분
+
+  late final FixedExtentScrollController _periodCtrl;
+  late final FixedExtentScrollController _hourCtrl;
+  late final FixedExtentScrollController _minuteCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _periodIdx = widget.initialHour24 < 12 ? 0 : 1;
+    final h12 = (widget.initialHour24 % 12 == 0)
+        ? 12
+        : (widget.initialHour24 % 12);
+    _hour12Idx = h12 - 1;
+    _minuteIdx = widget.initialMinute.clamp(0, 59);
+
+    _periodCtrl = FixedExtentScrollController(initialItem: _periodIdx);
+    _hourCtrl = FixedExtentScrollController(initialItem: _hour12Idx);
+    _minuteCtrl = FixedExtentScrollController(initialItem: _minuteIdx);
+  }
+
+  @override
+  void dispose() {
+    _periodCtrl.dispose();
+    _hourCtrl.dispose();
+    _minuteCtrl.dispose();
+    super.dispose();
+  }
+
+  int get _hour24 {
+    final h12 = _hour12Idx + 1;
+    if (_periodIdx == 0) {
+      return h12 == 12 ? 0 : h12;
+    }
+    return h12 == 12 ? 12 : h12 + 12;
+  }
+
+  Widget _buildWheel({
+    required FixedExtentScrollController controller,
+    required int itemCount,
+    required int selectedIndex,
+    required String Function(int index) labelBuilder,
+    required ValueChanged<int> onChanged,
+  }) {
+    return ListWheelScrollView.useDelegate(
+      controller: controller,
+      itemExtent: 42,
+      diameterRatio: 1.45,
+      perspective: 0.003,
+      magnification: 1.12,
+      useMagnifier: true,
+      overAndUnderCenterOpacity: 0.36,
+      physics: const FixedExtentScrollPhysics(),
+      onSelectedItemChanged: onChanged,
+      childDelegate: ListWheelChildBuilderDelegate(
+        childCount: itemCount,
+        builder: (ctx, idx) {
+          final isSelected = idx == selectedIndex;
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              controller.animateToItem(
+                idx,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+              );
+            },
+            child: Center(
+              child: Text(
+                labelBuilder(idx),
+                style: AppTheme.sans(
+                  size: 16,
+                  weight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected
+                      ? AppColors.primary
+                      : AppColors.mutedForeground,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final h24 = _hour24;
+    final hh = h24.toString().padLeft(2, '0');
+    final mm = _minuteIdx.toString().padLeft(2, '0');
+    final preview = SajuExplainer.describeSijin(
+      hour24: h24,
+      minute: _minuteIdx,
+      placeName: widget.placeName,
+      birthDate: widget.birthDate,
+      applyLocalTime: widget.applyLocalTime,
+    );
+
+    return AlertDialog(
+      backgroundColor: AppColors.card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+      contentPadding: const EdgeInsets.fromLTRB(20, 6, 20, 8),
+      actionsPadding: const EdgeInsets.fromLTRB(12, 0, 16, 14),
+      title: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '출생시간 선택',
+              style: AppTheme.serif(size: 16, weight: FontWeight.w700),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              '$hh:$mm',
+              style: AppTheme.sans(
+                size: 12.5,
+                weight: FontWeight.w700,
+                color: AppColors.goldLight,
+                height: 1.1,
+              ),
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 340,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 실시간 12시진 + 진태양시 애니메이션 프리뷰 배너
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              decoration: BoxDecoration(
+                color: AppColors.muted.withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.gold.withValues(alpha: 0.38),
+                ),
+              ),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.14),
+                      end: Offset.zero,
+                    ).animate(anim),
+                    child: child,
+                  ),
+                ),
+                child: Column(
+                  key: ValueKey('${preview.sijinLabel}_${preview.note}'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome,
+                          size: 14,
+                          color: AppColors.gold,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          preview.sijinLabel,
+                          style: AppTheme.serif(
+                            size: 14,
+                            weight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      preview.note,
+                      style: AppTheme.sans(
+                        size: 11.5,
+                        color: AppColors.mutedForeground,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            // 컬럼 헤더
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '오전/오후',
+                    textAlign: TextAlign.center,
+                    style: AppTheme.sans(
+                      size: 11.5,
+                      weight: FontWeight.w600,
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    '시',
+                    textAlign: TextAlign.center,
+                    style: AppTheme.sans(
+                      size: 11.5,
+                      weight: FontWeight.w600,
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    '분',
+                    textAlign: TextAlign.center,
+                    style: AppTheme.sans(
+                      size: 11.5,
+                      weight: FontWeight.w600,
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            // 3단 드럼 휠 피커
+            SizedBox(
+              height: 176,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // 중앙 선택 하이라이트 바
+                  IgnorePointer(
+                    child: Container(
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: AppColors.muted.withValues(alpha: 0.78),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.gold.withValues(alpha: 0.45),
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildWheel(
+                          controller: _periodCtrl,
+                          itemCount: 2,
+                          selectedIndex: _periodIdx,
+                          labelBuilder: (i) => i == 0 ? '오전' : '오후',
+                          onChanged: (i) => setState(() => _periodIdx = i),
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildWheel(
+                          controller: _hourCtrl,
+                          itemCount: 12,
+                          selectedIndex: _hour12Idx,
+                          labelBuilder: (i) => '${i + 1}시',
+                          onChanged: (i) => setState(() => _hour12Idx = i),
+                        ),
+                      ),
+                      Expanded(
+                        child: _buildWheel(
+                          controller: _minuteCtrl,
+                          itemCount: 60,
+                          selectedIndex: _minuteIdx,
+                          labelBuilder: (i) =>
+                              '${i.toString().padLeft(2, '0')}분',
+                          onChanged: (i) => setState(() => _minuteIdx = i),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '위아래로 드래그하거나 숫자를 눌러 부드럽게 선택하세요',
+              style: AppTheme.sans(
+                size: 11,
+                color: AppColors.mutedForeground,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        if (widget.hasExistingValue)
+          TextButton(
+            onPressed: () {
+              widget.onClear();
+              Navigator.of(context).pop();
+            },
+            child: const Text('초기화'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('취소'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            widget.onConfirm(_hour24, _minuteIdx);
+            Navigator.of(context).pop();
+          },
+          child: const Text('선택 완료'),
+        ),
+      ],
+    );
+  }
+}
+
+/// STEP 2 명식 확인 카드 — 4주 팩트 + 대화체 초보자 쉬운 해설 + 접힘식 전체 대운표
+class _PillarConfirmCard extends StatefulWidget {
+  final String title;
+  final String personName;
+  final SajuResult saju;
+  final VoidCallback onEdit;
+
+  const _PillarConfirmCard({
+    required this.title,
+    required this.personName,
+    required this.saju,
+    required this.onEdit,
+  });
+
+  @override
+  State<_PillarConfirmCard> createState() => _PillarConfirmCardState();
+}
+
+class _PillarConfirmCardState extends State<_PillarConfirmCard> {
+  bool _showDetails = false;
+
+  static const Map<String, Color> _elementColors = {
+    '목': Color(0xFF5A8F69),
+    '화': Color(0xFFC96B59),
+    '토': Color(0xFFC9A646),
+    '금': Color(0xFF7B8499),
+    '수': Color(0xFF3E6C93),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final saju = widget.saju;
+    final easy = SajuExplainer.explain(saju, userName: widget.personName);
+
+    final items = [
+      ('년주', saju.yearPillar, saju.yearPillarHanja),
+      ('월주', saju.monthPillar, saju.monthPillarHanja),
+      ('일주', saju.dayPillar, saju.dayPillarHanja),
+      (
+        '시주',
+        saju.hourUnknown ? '—' : (saju.hourPillar ?? '—'),
+        saju.hourUnknown ? '' : (saju.hourPillarHanja ?? '')
+      ),
+    ];
+
+    final infoLines = <String>[
+      if (saju.hourUnknown) '출생시간을 몰라 시주는 계산에서 제외했습니다 (3주 6글자 기준 분석).',
+      ...saju.boundaryWarnings,
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SoftCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. 헤더 + 수정 버튼
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: AppTheme.serif(
+                        size: 16,
+                        weight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: widget.onEdit,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      size: 15,
+                      color: AppColors.gold,
+                    ),
+                    label: Text(
+                      '수정',
+                      style: AppTheme.sans(
+                        size: 13,
+                        weight: FontWeight.w600,
+                        color: AppColors.gold,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 2. 4주(년·월·일·시주) 팩트 카드
+              Row(
+                children: items.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final e = entry.value;
+                  final isDay = idx == 2;
+                  return Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 14,
+                        horizontal: 4,
+                      ),
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isDay ? AppColors.primary : AppColors.muted,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            e.$1,
+                            style: AppTheme.sans(
+                              size: 11,
+                              color: isDay
+                                  ? Colors.white70
+                                  : AppColors.mutedForeground,
+                              height: 1.1,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            e.$2,
+                            style: AppTheme.serif(
+                              size: 19,
+                              weight: FontWeight.w700,
+                              color: isDay
+                                  ? AppColors.goldLight
+                                  : AppColors.primary,
+                              height: 1.2,
+                            ),
+                          ),
+                          if (e.$3.isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              e.$3,
+                              style: AppTheme.sans(
+                                size: 11,
+                                color: isDay
+                                    ? AppColors.goldLight
+                                        .withValues(alpha: 0.75)
+                                    : AppColors.mutedForeground,
+                                height: 1.1,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 18),
+
+              // 3. 쉽게 풀어 읽는 나의 명식 (대화체 해설)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppColors.gold.withValues(alpha: 0.28),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 3-1) 나를 상징하는 기운 (일간)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.auto_awesome,
+                          size: 15,
+                          color: AppColors.gold,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '나를 상징하는 기운',
+                          style: AppTheme.sans(
+                            size: 12,
+                            weight: FontWeight.w700,
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              easy.dayMasterBadge,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTheme.sans(
+                                size: 11.5,
+                                weight: FontWeight.w700,
+                                color: AppColors.goldLight,
+                                height: 1.1,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      easy.dayMasterStory,
+                      style: AppTheme.sans(
+                        size: 13.2,
+                        color: AppColors.primary,
+                        height: 1.55,
+                      ),
+                    ),
+
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(height: 1, color: AppColors.muted),
+                    ),
+
+                    // 3-2) 오행 밸런스 (4주 8글자 / 시주 미상 시 3주 6글자)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '내 사주의 5가지 기운',
+                          style: AppTheme.sans(
+                            size: 12,
+                            weight: FontWeight.w700,
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                        Text(
+                          easy.elementScopeLabel,
+                          style: AppTheme.sans(
+                            size: 11,
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: easy.elementCounts.entries.map((entry) {
+                        final key = entry.key;
+                        final count = entry.value;
+                        final ratio = easy.totalChars > 0
+                            ? (count / easy.totalChars)
+                            : 0.0;
+                        final barColor =
+                            _elementColors[key] ?? AppColors.primary;
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      key,
+                                      style: AppTheme.sans(
+                                        size: 11.5,
+                                        weight: FontWeight.w700,
+                                        color: count == 0
+                                            ? AppColors.mutedForeground
+                                            : barColor,
+                                      ),
+                                    ),
+                                    Text(
+                                      '$count',
+                                      style: AppTheme.sans(
+                                        size: 11.5,
+                                        weight: FontWeight.w700,
+                                        color: count == 0
+                                            ? AppColors.mutedForeground
+                                            : AppColors.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 5),
+                                Container(
+                                  height: 6,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.muted,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: TweenAnimationBuilder<double>(
+                                    tween: Tween<double>(begin: 0, end: ratio),
+                                    duration:
+                                        const Duration(milliseconds: 450),
+                                    curve: Curves.easeOutCubic,
+                                    builder: (ctx, val, child) =>
+                                        FractionallySizedBox(
+                                      alignment: Alignment.centerLeft,
+                                      widthFactor: val.clamp(0.0, 1.0),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: barColor,
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      easy.elementStory,
+                      style: AppTheme.sans(
+                        size: 12.8,
+                        color: AppColors.primary,
+                        height: 1.55,
+                      ),
+                    ),
+
+                    // 3-3) 현재 10년 대운 쉬운 풀이
+                    if (easy.currentDaeunBadge != null &&
+                        easy.currentDaeunStory != null) ...[
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Divider(height: 1, color: AppColors.muted),
+                      ),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.timeline_rounded,
+                            size: 15,
+                            color: AppColors.gold,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              '지금 지나가는 10년 흐름 · ${easy.currentDaeunBadge}',
+                              style: AppTheme.sans(
+                                size: 12,
+                                weight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        easy.currentDaeunStory!,
+                        style: AppTheme.sans(
+                          size: 12.8,
+                          color: AppColors.primary,
+                          height: 1.55,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // 4. 접힘식 전체 대운 흐름 · 만세력 상세 보기
+              if (saju.daeunSummary.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                InkWell(
+                  borderRadius: BorderRadius.circular(10),
+                  onTap: () => setState(() => _showDetails = !_showDetails),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 6,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          easy.daeunDirectionLabel.isEmpty
+                              ? '전체 대운 흐름 · 만세력 상세 보기'
+                              : '전체 대운 흐름 보기 (${easy.daeunDirectionLabel})',
+                          style: AppTheme.sans(
+                            size: 12,
+                            weight: FontWeight.w600,
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                        AnimatedRotation(
+                          turns: _showDetails ? 0.5 : 0.0,
+                          duration: const Duration(milliseconds: 220),
+                          child: const Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 18,
+                            color: AppColors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                AnimatedCrossFade(
+                  firstChild: const SizedBox.shrink(),
+                  secondChild: Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (easy.daeunTimeline.isNotEmpty)
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: easy.daeunTimeline.map((item) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: item.isCurrent
+                                      ? AppColors.primary
+                                      : AppColors.muted,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${item.pillar}(${item.hanja})',
+                                      style: AppTheme.sans(
+                                        size: 12,
+                                        weight: FontWeight.w700,
+                                        color: item.isCurrent
+                                            ? AppColors.goldLight
+                                            : AppColors.primary,
+                                        height: 1.1,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      item.isCurrent
+                                          ? '${item.ageRange} · 현재'
+                                          : item.ageRange,
+                                      style: AppTheme.sans(
+                                        size: 10.5,
+                                        color: item.isCurrent
+                                            ? Colors.white70
+                                            : AppColors.mutedForeground,
+                                        height: 1.1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '• 원문 대운표: ${saju.daeunSummary}',
+                          style: AppTheme.sans(
+                            size: 11.2,
+                            color: AppColors.mutedForeground,
+                            height: 1.45,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  crossFadeState: _showDetails
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  duration: const Duration(milliseconds: 240),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (infoLines.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.noticeBg,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Icon(
+                    Icons.info_outline,
+                    size: 17,
+                    color: AppColors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: infoLines
+                        .map(
+                          (w) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              w,
+                              style: AppTheme.sans(
+                                size: 12,
+                                color: AppColors.mutedForeground,
+                                height: 1.45,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
