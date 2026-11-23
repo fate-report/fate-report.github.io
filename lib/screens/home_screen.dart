@@ -94,13 +94,30 @@ class _HeroSection extends StatelessWidget {
               ),
             ),
           ),
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.40, 0.62, 0.86, 1.0],
+                  colors: [
+                    Colors.transparent,
+                    Color(0x8C10152A),
+                    Color(0x8C10152A),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  stops: const [0.52, 0.74, 0.90, 1.0],
+                  stops: const [0.82, 0.91, 0.97, 1.0],
                   colors: [
                     Colors.transparent,
                     const Color(0xFFFDF9F2).withValues(alpha: 0.35),
@@ -138,7 +155,7 @@ class _HeroSection extends StatelessWidget {
                             weight: FontWeight.w700,
                             color: Colors.white.withValues(alpha: 0.92),
                             letterSpacing: 3.5)
-                          ..copyWith(shadows: _softShadow)),
+                          .copyWith(shadows: _softShadow)),
                   ],
                 ),
                 const Spacer(),
@@ -181,7 +198,7 @@ class _HeroSection extends StatelessWidget {
                         weight: FontWeight.w700,
                         height: 1.4,
                         letterSpacing: -0.3)
-                      ..copyWith(shadows: _softShadow)),
+                      .copyWith(shadows: _softShadow)),
                 Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
@@ -192,7 +209,7 @@ class _HeroSection extends StatelessWidget {
                             weight: FontWeight.w700,
                             height: 1.4,
                             letterSpacing: -0.3)
-                          ..copyWith(shadows: _softShadow)),
+                          .copyWith(shadows: _softShadow)),
                     Text('사주 리포트',
                         style: AppTheme.serif(
                             size: 29,
@@ -200,17 +217,17 @@ class _HeroSection extends StatelessWidget {
                             weight: FontWeight.w700,
                             height: 1.4,
                             letterSpacing: -0.3)
-                          ..copyWith(shadows: _softShadow)),
+                          .copyWith(shadows: _softShadow)),
                   ],
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  '좋은 말만 해주는 운세가 아니라,\n계산된 명식으로 오늘의 답을 드립니다.',
+                  '좋은 말만 해주는 운세가 아니라,\n정확히 계산한 사주로 오늘의 답을 드립니다.',
                   style: AppTheme.sans(
                       size: 14.5,
                       color: Colors.white.withValues(alpha: 0.9),
                       height: 1.7)
-                    ..copyWith(shadows: _softShadow),
+                    .copyWith(shadows: _softShadow),
                 ),
                 const SizedBox(height: 26),
                 GradientButton(
@@ -450,7 +467,7 @@ class _ComingSoonSection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('마스터 엔진 심층 질문 주제',
+              Text('이런 것도 물어볼 수 있어요',
                   style: AppTheme.serif(size: 17, weight: FontWeight.w700)),
               const SizedBox(width: 10),
               Container(
@@ -461,7 +478,7 @@ class _ComingSoonSection extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  'LIVE 탑재 완료',
+                  '바로 가능',
                   style: AppTheme.sans(
                       size: 11,
                       weight: FontWeight.w700,
@@ -473,7 +490,7 @@ class _ComingSoonSection extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'STEP 3 질문 입력창이나 리포트 하단의 [이어서 물어보기] 채팅에서 아래 주제들을 바로 물어보실 수 있습니다.',
+            '질문을 적는 칸이나 리포트 아래 [이어서 물어보기]에서 바로 물어볼 수 있습니다.',
             style: AppTheme.sans(size: 12.5, color: AppColors.mutedForeground),
           ),
           const SizedBox(height: 12),

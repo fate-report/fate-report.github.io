@@ -1,11 +1,11 @@
 {
-    "name": "fate_report",
-    "short_name": "fate_report",
+    "name": "Fate Report",
+    "short_name": "Fate Report",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FBF6EE",
+    "theme_color": "#1A2138",
+    "description": "만세력 기준 AI 사주·궁합 리포트",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -220,7 +220,7 @@ class _InputScreenState extends State<InputScreen> {
     final title = categoryList
         .firstWhere((c) => c.category == widget.category)
         .plainName;
-    final steps = ['기본정보', '명식 확인', '질문'];
+    final steps = ['기본정보', '사주 확인', '질문'];
     return Scaffold(
       body: PageBackground(
         child: SafeArea(
@@ -277,7 +277,7 @@ class _InputScreenState extends State<InputScreen> {
                         ? Opacity(
                             opacity: _canProceed ? 1.0 : 0.45,
                             child: GradientButton(
-                              label: '명식 계산하기',
+                              label: '내 사주 계산하기',
                               icon: Icons.auto_awesome,
                               gold: false,
                               onPressed: _canProceed ? _next : null,
@@ -396,7 +396,7 @@ class _StepBasicInfo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('나의 명식 정보',
+        Text('내 정보',
             style: AppTheme.serif(
                 size: 20, weight: FontWeight.w700, color: AppColors.primary)),
         const SizedBox(height: 14),
@@ -482,7 +482,7 @@ class _StepBasicInfo extends StatelessWidget {
         ],
         if (showPartnerForm) ...[
           const SizedBox(height: 22),
-          Text('상대방 명식 정보',
+          Text('상대방 정보',
               style: AppTheme.serif(
                   size: 20, weight: FontWeight.w700, color: AppColors.primary)),
           const SizedBox(height: 14),
@@ -1294,7 +1294,7 @@ class _PersonFormState extends State<_PersonForm> {
                   onChanged: (v) => widget.onTimeUnknown(v ?? false),
                 ),
                 Expanded(
-                  child: Text('출생시간 모름 (3주 6글자 기준 분석)',
+                  child: Text('태어난 시간을 몰라요 (시간 빼고 분석)',
                       style: AppTheme.sans(
                           size: 12.5,
                           color: AppColors.mutedForeground,
@@ -1389,7 +1389,7 @@ class _PersonFormState extends State<_PersonForm> {
                   onChanged: (v) => widget.onApplyLocalTime(v ?? true),
                 ),
                 Expanded(
-                  child: Text('지역시(진태양시) 보정 적용',
+                  child: Text('태어난 지역에 맞춰 시간 보정',
                       style: AppTheme.sans(
                           size: 12.5,
                           color: AppColors.mutedForeground,
@@ -1532,17 +1532,17 @@ class _StepConfirm extends StatelessWidget {
                 size: 21, weight: FontWeight.w700, color: AppColors.primary)),
         const SizedBox(height: 6),
         Text(
-          '만세력으로 자동 계산된 명식입니다. 다르면 직접 수정할 수 있어요.',
+          '만세력으로 자동 계산한 사주입니다. 다르면 직접 고칠 수 있어요.',
           style: AppTheme.sans(size: 13.5, color: AppColors.mutedForeground),
         ),
         const SizedBox(height: 16),
         _PillarConfirmCard(
-          title: '나의 명식 (${user.userName.isEmpty ? "본인" : user.userName})',
+          title: '내 사주 (${user.userName.isEmpty ? "본인" : user.userName})',
           personName: user.userName,
           saju: mySaju,
           onEdit: () => _showEditDialog(
             context: context,
-            label: '나의 명식 직접 수정 (K04 확정)',
+            label: '내 사주 직접 고치기',
             initialY: user.yearPillar ?? '',
             initialM: user.monthPillar ?? '',
             initialD: user.dayPillar ?? '',
@@ -1568,12 +1568,12 @@ class _StepConfirm extends StatelessWidget {
           const SizedBox(height: 14),
           _PillarConfirmCard(
             title:
-                '상대의 명식 (${partner!.partnerName.isEmpty ? "상대" : partner!.partnerName})',
+                '상대의 사주 (${partner!.partnerName.isEmpty ? "상대" : partner!.partnerName})',
             personName: partner!.partnerName,
             saju: partner!.toSaju(),
             onEdit: () => _showEditDialog(
               context: context,
-              label: '상대 명식 직접 수정 (K04 확정)',
+              label: '상대 사주 직접 고치기',
               initialY: partner!.partnerYearPillar ?? '',
               initialM: partner!.partnerMonthPillar ?? '',
               initialD: partner!.partnerDayPillar ?? '',
@@ -1697,7 +1697,7 @@ class _StepConfirm extends StatelessWidget {
                 onSave(y, m, d, h);
                 Navigator.of(ctx).pop();
               },
-              child: const Text('K04 확정 저장'),
+              child: const Text('저장하기'),
             ),
           ],
         ),

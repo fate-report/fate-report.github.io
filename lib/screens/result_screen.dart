@@ -250,6 +250,26 @@ class _ResultScreenState extends State<ResultScreen> {
 
   String _stripBoldMarkers(String s) => s.replaceAll('**', '').trim();
 
+  /// 내부 규칙 코드(K04, K07-R3 등)를 화면용 쉬운 말로 바꾼다.
+  /// 예: '[적용 기준: K04, K09 | 확신도: HIGH(높음)]' → '분석 확신도: 높음'
+  String _plainAudit(String s) {
+    final m = RegExp(r'확신도:\s*[A-Za-z]*\(?([^)\]|]+)\)?').firstMatch(s);
+    final label = m?.group(1)?.trim() ?? '';
+    if (label.isNotEmpty) return '분석 확신도: $label';
+    return _plainTitle(s.replaceAll(RegExp(r'[\[\]]'), ''));
+  }
+
+  /// 제목에 섞인 내부 규칙 코드와 내부 용어를 걷어낸다.
+  String _plainTitle(String s) {
+    final out = s
+        .replaceAll(RegExp(r'\s*\([^()]*K\d{2}[^()]*\)'), '')
+        .replaceAll(RegExp(r'K\d{2}(-R\d)?'), '')
+        .replaceAll('마스터 ', '')
+        .replaceAll(RegExp(r'\s{2,}'), ' ')
+        .trim();
+    return out.isEmpty ? s : out;
+  }
+
   Widget _userQuestionBanner({String? directAnswer}) {
     final q = widget.userQuestion.trim();
     if (q.isEmpty) return const SizedBox.shrink();
@@ -343,7 +363,7 @@ class _ResultScreenState extends State<ResultScreen> {
         const SizedBox(height: 12),
         if (r.briefingBody.isNotEmpty) ...[
           _masterBriefingCard(
-            r.briefingTitle.isNotEmpty ? r.briefingTitle : '마스터 심층 브리핑',
+            r.briefingTitle.isNotEmpty ? r.briefingTitle : '자세한 풀이',
             r.briefingBody,
           ),
           const SizedBox(height: 12),
@@ -388,7 +408,7 @@ class _ResultScreenState extends State<ResultScreen> {
           _userQuestionBanner(),
           _holdCard(r.holdReason ?? '판정 보류'),
           const SizedBox(height: 12),
-          _keyResultCard('판정 보류 (K08)', '지금은 점수를 확정하지 않았습니다', r.finalJudgment),
+          _keyResultCard('판정 보류', '지금은 점수를 확정하지 않았습니다', r.finalJudgment),
           const SizedBox(height: 12),
           if (r.briefingBody.isNotEmpty) ...[
             _masterBriefingCard('판정 보류 안내', r.briefingBody),
@@ -415,7 +435,7 @@ class _ResultScreenState extends State<ResultScreen> {
           _masterBriefingCard(
             r.briefingTitle.isNotEmpty
                 ? r.briefingTitle
-                : '마스터 궁합 브리핑 (K07-R3 · K09)',
+                : '궁합 자세히 보기',
             r.briefingBody,
           ),
           const SizedBox(height: 12),
@@ -480,7 +500,7 @@ class _ResultScreenState extends State<ResultScreen> {
                   size: 18, color: AppColors.accent),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(headerTitle,
+                child: Text(_plainTitle(headerTitle),
                     style: GoogleFonts.notoSerifKr(
                       fontSize: 16.5,
                       fontWeight: FontWeight.w700,
@@ -673,7 +693,7 @@ class _ResultScreenState extends State<ResultScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              footerText,
+              _plainAudit(footerText),
               style: GoogleFonts.notoSansKr(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -713,7 +733,7 @@ class _ResultScreenState extends State<ResultScreen> {
               const Icon(Icons.forum_outlined, size: 19, color: AppColors.gold),
               const SizedBox(width: 8),
               Text(
-                '이어서 물어보기 (꼬리 질문)',
+                '이어서 물어보기',
                 style: GoogleFonts.notoSerifKr(
                   fontSize: 16.5,
                   fontWeight: FontWeight.w700,
@@ -724,7 +744,7 @@ class _ResultScreenState extends State<ResultScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            '확정된 명식(K04)을 바탕으로 앞선 설명 반복 없이 궁금한 점만 콕 집어 이어 답해드려요.',
+            '방금 본 사주를 바탕으로, 궁금한 점만 콕 집어 이어서 답해드려요.',
             style: AppTheme.sans(size: 12.5, color: AppColors.mutedForeground),
           ),
           const SizedBox(height: 14),
@@ -798,7 +818,7 @@ class _ResultScreenState extends State<ResultScreen> {
                             turn.auditFooter!.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           Text(
-                            turn.auditFooter!,
+                            _plainAudit(turn.auditFooter!),
                             style: GoogleFonts.notoSansKr(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -823,7 +843,7 @@ class _ResultScreenState extends State<ResultScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
                 const SizedBox(width: 10),
-                Text('마스터 엔진이 K01~K10 기준으로 답변을 정리하고 있어요...',
+                Text('답변을 정리하고 있어요...',
                     style: AppTheme.sans(
                         size: 12, color: AppColors.mutedForeground)),
               ],
@@ -866,7 +886,7 @@ class _ResultScreenState extends State<ResultScreen> {
   }
 
   Widget _keyResultCard(String title, String key, String summary) {
-    final cleanTitle = _stripBoldMarkers(title);
+    final cleanTitle = _plainTitle(_stripBoldMarkers(title));
     final cleanKey = _stripBoldMarkers(key);
     return SoftCard(
       padding: const EdgeInsets.all(24),
@@ -918,7 +938,7 @@ class _ResultScreenState extends State<ResultScreen> {
               Icon(icon, size: 18, color: accent),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(_stripBoldMarkers(title),
+                child: Text(_plainTitle(_stripBoldMarkers(title)),
                     style: GoogleFonts.notoSerifKr(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -967,7 +987,7 @@ class _ResultScreenState extends State<ResultScreen> {
                   size: 18, color: AppColors.accent),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(_stripBoldMarkers(title),
+                child: Text(_plainTitle(_stripBoldMarkers(title)),
                     style: GoogleFonts.notoSerifKr(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -1054,7 +1074,7 @@ class _ResultScreenState extends State<ResultScreen> {
                           color: AppColors.primary,
                           height: 1,
                         )),
-                    Text('/ 100 (K07-R3)',
+                    Text('/ 100점',
                         style: GoogleFonts.notoSansKr(
                             fontSize: 12, color: AppColors.mutedForeground)),
                   ],
@@ -1127,7 +1147,7 @@ class _ResultScreenState extends State<ResultScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('K07-R3 항목별 정량 채점표',
+          Text('항목별 점수',
               style: GoogleFonts.notoSerifKr(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -1217,7 +1237,7 @@ class _ResultScreenState extends State<ResultScreen> {
           const Icon(Icons.pause_circle_outline,
               size: 40, color: AppColors.signalGray),
           const SizedBox(height: 12),
-          Text('궁합 판정 보류 (K08)',
+          Text('궁합 판정 보류',
               style: GoogleFonts.notoSerifKr(
                 fontSize: 19,
                 fontWeight: FontWeight.w700,
@@ -1324,7 +1344,7 @@ class _LoadingView extends StatelessWidget {
                   color: AppColors.primary,
                 )),
             const SizedBox(height: 8),
-            BodyText('K01~K10 마스터 엔진과 4인 하네스가 명식을 정밀 검산 중입니다...',
+            BodyText('계산이 맞는지 여러 번 확인하고 있어요. 잠시만 기다려주세요.',
                 size: 13.5,
                 align: TextAlign.center,
                 color: AppColors.mutedForeground),
