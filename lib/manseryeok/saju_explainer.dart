@@ -163,7 +163,7 @@ class SajuExplainer {
   /// 확정 명식(SajuResult)을 초보자도 단번에 이해하는 대화체 요약으로 변환
   static SajuEasySummary explain(SajuResult saju, {String? userName}) {
     final trimmedName = userName?.trim() ?? '';
-    final prefix = trimmedName.isEmpty ? '이 명식은' : '$trimmedName님은';
+    final prefix = trimmedName.isEmpty ? '이 사주는' : '$trimmedName님은';
 
     // 1. 일간(나를 상징하는 기운) 풀이
     final dm = saju.dayMaster.isNotEmpty
@@ -174,7 +174,7 @@ class SajuExplainer {
         profile != null ? '${profile.$1} · ${profile.$2}' : '$dm 일간';
     final dayMasterStory = profile != null
         ? '$prefix ${profile.$3}'
-        : '$prefix $dm 기운을 중심으로 살아가는 명식입니다.';
+        : '$prefix $dm 기운을 중심으로 살아가는 사주입니다.';
 
     // 2. 4주 8글자(또는 시주 미상 시 3주 6글자) 오행 밸런스 풀이
     final counts = saju.displayElements;
