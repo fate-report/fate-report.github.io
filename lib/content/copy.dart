@@ -5,24 +5,15 @@ library;
 class AppCopy {
   // ── 홈 문구 ──
   static const appName = 'Fate Report';
-  static const homeMainHeadline =
-      '좋은 말만 해주는 운세가 아니라,\n만세력 기준으로 지금 고민을 풀어주는 사주 리포트';
-  static const homeSubHeadline =
-      '생년월일시로 계산한 사주를 바탕으로 성향, 연애, 궁합, 진로·재물, 올해 흐름을 다정하고 깊이 있게 풀어드립니다.';
-  static const homeCtaLabel = '내 사주 리포트 시작하기';
+  static const homeMainHeadline = '지금의 고민에,\n사주가 답합니다';
+  static const homeSubHeadline = '듣기 좋은 말보다, 만세력으로 계산한 근거를 드립니다.';
+  static const homeCtaLabel = '내 사주 펼쳐보기';
 
-  // ── 신뢰 카드 5개 ──
+  // ── 신뢰 문구 3줄 ──
   static const trustCards = <TrustCard>[
-    TrustCard('만세력으로 정확하게 계산해요',
-        '태어난 날짜와 시간, 지역까지 반영해 사주를 계산하고 10년 단위 큰 흐름과 올해 운도 함께 봅니다.'),
-    TrustCard('네 번 확인한 뒤 보여드려요',
-        '계산이 맞는지, 반대로 봐도 말이 되는지, 쉬운 말로 풀렸는지, 빠진 내용은 없는지 확인합니다.'),
-    TrustCard('근거가 있는 궁합 점수',
-        '두 사람의 사주 글자를 항목별로 채점해 초록·노랑·빨강 신호등으로 보여드립니다.'),
-    TrustCard('카톡처럼 쉬운 설명',
-        '어려운 한자 용어 대신 술술 읽히는 이야기와 지금 해볼 행동을 알려드립니다.'),
-    TrustCard('모를 땐 모른다고 말해요',
-        '정보가 부족하거나 날짜·시간이 경계에 걸리면 억지로 단정하지 않고 그대로 알려드립니다.'),
+    TrustCard('만세력으로 계산합니다', '태어난 날짜와 시간으로 사주를 정확히 계산합니다.'),
+    TrustCard('네 번 검증합니다', '계산과 풀이를 네 번 확인한 뒤에만 보여드립니다.'),
+    TrustCard('억지로 단정하지 않습니다', '정보가 부족하면 모른다고 그대로 알려드립니다.'),
   ];
 
   // ── 공통 주의 문구 ──
@@ -129,13 +120,4 @@ const categoryList = <CategoryInfo>[
     plainName: '내 사주 종합',
     desc: '타고난 성향과 2026년 올해의 흐름을 다정하게 풀어드립니다.',
   ),
-];
-
-/// 결과 화면 꼬리 질문에서 즉시 사용 가능한 확장 주제 배지
-const comingSoonList = <String>[
-  '올해와 내년 비교',
-  '언제가 좋은 시기인지',
-  '재회·연락 가능성',
-  '돈이 들어오고 나가는 흐름',
-  '나에게 맞는 직업·진로',
 ];

@@ -25,12 +25,15 @@ class AppColors {
   static const goodBg = Color(0xFFEDF4EE);
   static const riskBg = Color(0xFFF8F1E1);
   static const noticeBg = Color(0xFFF1EFEA);
+
+  /// 카드 외곽의 얇은 테두리 (그림자 대신 형태를 잡아준다)
+  static const hairline = Color(0x141A2138);
 }
 
 class AppRadius {
-  static const double card = 24.0;
-  static const double chip = 14.0;
-  static const double button = 18.0;
+  static const double card = 18.0;
+  static const double chip = 12.0;
+  static const double button = 14.0;
 }
 
 class AppGradients {
@@ -53,29 +56,24 @@ class AppGradients {
   static const primaryBtn = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF2A3252), Color(0xFF1A2138)],
+    colors: [Color(0xFF1A2138), Color(0xFF3A2C52)],
   );
 }
 
 class AppShadows {
   static List<BoxShadow> get card => [
         BoxShadow(
-          color: const Color(0xFF1A2138).withValues(alpha: 0.05),
-          blurRadius: 24,
-          offset: const Offset(0, 10),
-        ),
-        BoxShadow(
-          color: const Color(0xFF1A2138).withValues(alpha: 0.03),
-          blurRadius: 6,
-          offset: const Offset(0, 2),
+          color: const Color(0xFF1A2138).withValues(alpha: 0.04),
+          blurRadius: 14,
+          offset: const Offset(0, 4),
         ),
       ];
 
   static List<BoxShadow> get elevated => [
         BoxShadow(
-          color: const Color(0xFF453061).withValues(alpha: 0.12),
-          blurRadius: 40,
-          offset: const Offset(0, 18),
+          color: const Color(0xFF453061).withValues(alpha: 0.14),
+          blurRadius: 22,
+          offset: const Offset(0, 10),
         ),
       ];
 

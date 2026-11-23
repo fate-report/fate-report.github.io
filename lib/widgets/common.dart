@@ -29,43 +29,78 @@ class SoftCard extends StatelessWidget {
         gradient: gradient,
         borderRadius: BorderRadius.circular(AppRadius.card),
         boxShadow: shadow ?? AppShadows.card,
-        border: border,
+        border: border ?? Border.all(color: AppColors.hairline, width: 1),
       ),
       child: child,
     );
   }
 }
 
-/// 그라데이션 프라이머리 버튼
-class GradientButton extends StatelessWidget {
+/// 그라데이션 프라이머리 버튼.
+/// [gold]는 어두운 배경 위의 대표 버튼에만 쓰고, [shimmer]를 켜면 빛이 천천히 지나간다.
+class GradientButton extends StatefulWidget {
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
   final bool gold;
+  final bool shimmer;
   const GradientButton({
     super.key,
     required this.label,
     this.onPressed,
     this.icon,
     this.gold = false,
+    this.shimmer = false,
   });
 
   @override
+  State<GradientButton> createState() => _GradientButtonState();
+}
+
+class _GradientButtonState extends State<GradientButton>
+    with SingleTickerProviderStateMixin {
+  AnimationController? _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.shimmer) {
+      _ctrl = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 3200),
+      )..repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final label = widget.label;
+    final icon = widget.icon;
+    final gold = widget.gold;
+    final radius = BorderRadius.circular(AppRadius.button);
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.button),
-        onTap: onPressed,
+        borderRadius: radius,
+        onTap: widget.onPressed,
         child: Ink(
           decoration: BoxDecoration(
             gradient: gold ? AppGradients.gold : AppGradients.primaryBtn,
-            borderRadius: BorderRadius.circular(AppRadius.button),
+            borderRadius: radius,
             boxShadow: gold ? AppShadows.gold : AppShadows.elevated,
           ),
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 17),
             alignment: Alignment.center,
+            decoration: _ctrl == null
+                ? null
+                : _ShimmerDecoration(animation: _ctrl!, radius: radius),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -89,6 +124,103 @@ class GradientButton extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 버튼 위를 천천히 지나가는 빛. 애니메이션 값이 바뀔 때만 다시 그린다.
+class _ShimmerDecoration extends Decoration {
+  final Animation<double> animation;
+  final BorderRadius radius;
+  const _ShimmerDecoration({required this.animation, required this.radius});
+
+  @override
+  BoxPainter createBoxPainter([VoidCallback? onChanged]) =>
+      _ShimmerPainter(animation, radius, onChanged);
+}
+
+class _ShimmerPainter extends BoxPainter {
+  final Animation<double> animation;
+  final BorderRadius radius;
+  _ShimmerPainter(this.animation, this.radius, VoidCallback? onChanged)
+      : super(onChanged) {
+    if (onChanged != null) animation.addListener(onChanged);
+  }
+
+  @override
+  void paint(Canvas canvas, Offset offset, ImageConfiguration configuration) {
+    final size = configuration.size;
+    if (size == null) return;
+    final rect = offset & size;
+    // 전체 주기의 앞 45% 동안만 빛이 지나가고 나머지는 쉰다.
+    final t = (animation.value / 0.45).clamp(0.0, 1.0);
+    if (t >= 1.0) return;
+    final band = size.width * 0.35;
+    final x = rect.left - band + (size.width + band * 2) * t;
+    final shader = LinearGradient(
+      colors: [
+        Colors.white.withValues(alpha: 0),
+        Colors.white.withValues(alpha: 0.32),
+        Colors.white.withValues(alpha: 0),
+      ],
+    ).createShader(Rect.fromLTWH(x - band / 2, rect.top, band, size.height));
+    canvas.save();
+    canvas.clipRRect(radius.toRRect(rect));
+    canvas.drawRect(rect, Paint()..shader = shader);
+    canvas.restore();
+  }
+
+  @override
+  void dispose() {
+    if (onChanged != null) animation.removeListener(onChanged!);
+    super.dispose();
+  }
+}
+
+/// 처음 나타날 때 살짝 떠오르며 등장한다. [delay]로 순서를 줄 수 있다.
+class FadeSlideIn extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+  const FadeSlideIn({super.key, required this.child, this.delay = Duration.zero});
+
+  @override
+  State<FadeSlideIn> createState() => _FadeSlideInState();
+}
+
+class _FadeSlideInState extends State<FadeSlideIn>
+    with SingleTickerProviderStateMixin {
+  static const _run = Duration(milliseconds: 420);
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    final total = _run + widget.delay;
+    _ctrl = AnimationController(vsync: this, duration: total);
+    final begin = widget.delay.inMilliseconds / total.inMilliseconds;
+    _anim = CurvedAnimation(
+      parent: _ctrl,
+      curve: Interval(begin, 1.0, curve: Curves.easeOutCubic),
+    );
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _anim,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
+            .animate(_anim),
+        child: widget.child,
       ),
     );
   }

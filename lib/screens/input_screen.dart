@@ -603,10 +603,16 @@ class _PersonForm extends StatefulWidget {
 class _PersonFormState extends State<_PersonForm> {
   late final TextEditingController _nameCtrl;
 
+  /// 선택 항목(이름·출생지역·시간 보정)을 펼쳤는지 여부.
+  bool _showMore = false;
+
   @override
   void initState() {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.name);
+    // 이미 입력해 둔 값이 있으면 숨기지 않는다.
+    _showMore = widget.name.trim().isNotEmpty ||
+        (widget.place?.trim().isNotEmpty ?? false);
   }
 
   @override
@@ -1130,14 +1136,6 @@ class _PersonFormState extends State<_PersonForm> {
                 style: AppTheme.serif(size: 16, weight: FontWeight.w700)),
             const SizedBox(height: 14),
           ],
-          _fieldLabel('이름 / 닉네임'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _nameCtrl,
-            decoration: _dec('예: 홍길동'),
-            onChanged: widget.onName,
-          ),
-          const SizedBox(height: 16),
           _fieldLabel('성별'),
           const SizedBox(height: 8),
           _Choice(
@@ -1238,7 +1236,7 @@ class _PersonFormState extends State<_PersonForm> {
                         ),
                         child: Text(
                           widget.timeUnknown
-                              ? '출생시간 모름 (3주 6글자 기준 분석)'
+                              ? '시간은 빼고 분석해요'
                               : _formatDisplayTime(widget.time),
                           key: ValueKey(
                             '${widget.timeUnknown}_${widget.time}_${widget.place}_${widget.applyLocalTime}',
@@ -1303,7 +1301,40 @@ class _PersonFormState extends State<_PersonForm> {
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
+          // 선택 항목은 접어 두고, 원하는 사람만 펼쳐서 입력한다.
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => setState(() => _showMore = !_showMore),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  Icon(_showMore ? Icons.remove : Icons.add,
+                      size: 16, color: AppColors.accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text('더 정확하게 보기 · 이름, 태어난 지역 (선택)',
+                        style: AppTheme.sans(
+                            size: 13,
+                            weight: FontWeight.w600,
+                            color: AppColors.accent,
+                            height: 1.3)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_showMore) ...[
+          const SizedBox(height: 8),
+          _fieldLabel('이름 / 닉네임'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _nameCtrl,
+            decoration: _dec('예: 홍길동'),
+            onChanged: widget.onName,
+          ),
+          const SizedBox(height: 16),
           _fieldLabel('출생지역'),
           const SizedBox(height: 8),
           Builder(
@@ -1323,7 +1354,7 @@ class _PersonFormState extends State<_PersonForm> {
                   birthDate: widget.date,
                 ).round();
                 placeLabel =
-                    '$displayTitle (진태양시 ${_formatSolarOffset(offsetMin)})';
+                    '$displayTitle (시간 보정 ${_formatSolarOffset(offsetMin)})';
               } else if (rawPlace.isNotEmpty) {
                 placeLabel = rawPlace;
               }
@@ -1398,6 +1429,7 @@ class _PersonFormState extends State<_PersonForm> {
               ],
             ),
           ),
+          ],
         ],
       ),
     );

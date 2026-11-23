@@ -27,13 +27,11 @@ class HomeScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const _CategorySection(),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 36),
                         const _TrustSection(),
-                        const SizedBox(height: 40),
-                        const _ComingSoonSection(),
-                        const SizedBox(height: 40),
+                        const SizedBox(height: 16),
                         const _FaqSection(),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 24),
                         _FooterNotice(),
                         const SizedBox(height: 20),
                         Center(
@@ -191,49 +189,37 @@ class _HeroSection extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-                Text('만세력 기준으로,',
+                Text('지금의 고민에,',
                     style: AppTheme.serif(
-                        size: 29,
+                        size: 31,
                         color: Colors.white,
-                        weight: FontWeight.w700,
-                        height: 1.4,
-                        letterSpacing: -0.3)
+                        weight: FontWeight.w600,
+                        height: 1.35,
+                        letterSpacing: -0.6)
                       .copyWith(shadows: _softShadow)),
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text('지금 고민을 풀어주는 ',
-                        style: AppTheme.serif(
-                            size: 29,
-                            color: Colors.white,
-                            weight: FontWeight.w700,
-                            height: 1.4,
-                            letterSpacing: -0.3)
-                          .copyWith(shadows: _softShadow)),
-                    Text('사주 리포트',
-                        style: AppTheme.serif(
-                            size: 29,
-                            color: AppColors.goldLight,
-                            weight: FontWeight.w700,
-                            height: 1.4,
-                            letterSpacing: -0.3)
-                          .copyWith(shadows: _softShadow)),
-                  ],
-                ),
-                const SizedBox(height: 16),
+                Text('사주가 답합니다',
+                    style: AppTheme.serif(
+                        size: 31,
+                        color: AppColors.goldLight,
+                        weight: FontWeight.w600,
+                        height: 1.35,
+                        letterSpacing: -0.6)
+                      .copyWith(shadows: _softShadow)),
+                const SizedBox(height: 14),
                 Text(
-                  '좋은 말만 해주는 운세가 아니라,\n정확히 계산한 사주로 오늘의 답을 드립니다.',
+                  AppCopy.homeSubHeadline,
                   style: AppTheme.sans(
                       size: 14.5,
                       color: Colors.white.withValues(alpha: 0.9),
-                      height: 1.7)
+                      height: 1.6)
                     .copyWith(shadows: _softShadow),
                 ),
                 const SizedBox(height: 26),
                 GradientButton(
-                  label: '내 사주 분석 시작하기',
+                  label: AppCopy.homeCtaLabel,
                   icon: Icons.auto_awesome,
                   gold: true,
+                  shimmer: true,
                   onPressed: () {
                     context
                         .read<AppState>()
@@ -264,13 +250,16 @@ class _CategorySection extends StatelessWidget {
         const SectionHeader(
           eyebrow: 'YOUR QUESTION',
           title: '지금 어떤 고민이신가요?',
-          subtitle: '고민을 고르면 그에 맞춘 리포트를 드립니다.',
+          subtitle: '고민을 고르면 거기에 맞춰 답합니다.',
         ),
         const SizedBox(height: 18),
         ...List.generate(categoryList.length, (i) {
           return Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: _CategoryCard(info: categoryList[i], index: i),
+            padding: const EdgeInsets.only(bottom: 12),
+            child: FadeSlideIn(
+              delay: Duration(milliseconds: 70 * i),
+              child: _CategoryCard(info: categoryList[i], index: i),
+            ),
           );
         }),
       ],
@@ -318,70 +307,41 @@ class _CategoryCard extends StatelessWidget {
           ));
         },
         child: SoftCard(
-          padding: const EdgeInsets.fromLTRB(18, 18, 16, 18),
+          padding: const EdgeInsets.fromLTRB(18, 18, 14, 18),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.accentSoft.withValues(alpha: 0.16),
-                      AppColors.gold.withValues(alpha: 0.14),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(_icon, size: 24, color: AppColors.accent),
-              ),
-              const SizedBox(width: 15),
+              Icon(_icon, size: 22, color: AppColors.accent),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(info.plainName,
+                        style: AppTheme.sans(
+                            size: 11,
+                            weight: FontWeight.w700,
+                            color: AppColors.accentSoft,
+                            letterSpacing: 0.4,
+                            height: 1)),
+                    const SizedBox(height: 7),
                     Text(info.questionTitle,
-                        style: AppTheme.serif(size: 16.5, height: 1.35)),
-                    const SizedBox(height: 6),
+                        style: AppTheme.serif(
+                            size: 16.5,
+                            weight: FontWeight.w600,
+                            height: 1.35,
+                            letterSpacing: -0.3)),
+                    const SizedBox(height: 5),
                     Text(info.desc,
                         style: AppTheme.sans(
                             size: 12.5,
                             color: AppColors.mutedForeground,
                             height: 1.45)),
-                    const SizedBox(height: 9),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 9, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.muted,
-                        borderRadius: BorderRadius.circular(7),
-                      ),
-                      child: Text(info.plainName,
-                          style: AppTheme.sans(
-                              size: 10.5,
-                              weight: FontWeight.w700,
-                              color: AppColors.accent,
-                              letterSpacing: 0.3,
-                              height: 1)),
-                    ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                width: 32,
-                height: 32,
-                margin: const EdgeInsets.only(top: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.muted.withValues(alpha: 0.6),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.arrow_forward_rounded,
-                    size: 16, color: AppColors.primary),
-              ),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 22, color: AppColors.mutedForeground),
             ],
           ),
         ),
@@ -399,143 +359,107 @@ class _TrustSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SectionHeader(
-            eyebrow: 'WHY TRUST US', title: '왜 믿을 만한가요?'),
-        const SizedBox(height: 18),
-        ...AppCopy.trustCards.asMap().entries.map((e) {
-          final idx = e.key + 1;
-          final card = e.value;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: SoftCard(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                          color: AppColors.gold.withValues(alpha: 0.5)),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text('$idx',
-                        style: AppTheme.serif(
-                            size: 13,
-                            weight: FontWeight.w700,
-                            color: AppColors.gold)),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(card.title,
-                            style: AppTheme.sans(
-                                size: 15,
-                                weight: FontWeight.w700,
-                                color: AppColors.primary,
+            eyebrow: 'WHY TRUST US', title: '믿을 수 있는 이유'),
+        const SizedBox(height: 16),
+        // 카드 여러 장 대신 한 장에 세 줄로 담아 홈을 짧게 유지한다.
+        SoftCard(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          child: Column(
+            children: [
+              for (var i = 0; i < AppCopy.trustCards.length; i++) ...[
+                if (i > 0) const Divider(height: 1, color: AppColors.hairline),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text('0${i + 1}',
+                            style: AppTheme.serif(
+                                size: 13,
+                                weight: FontWeight.w600,
+                                color: AppColors.gold,
                                 height: 1.3)),
-                        const SizedBox(height: 4),
-                        BodyText(card.desc,
-                            size: 13.5, color: AppColors.mutedForeground),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(AppCopy.trustCards[i].title,
+                                style: AppTheme.sans(
+                                    size: 14.5,
+                                    weight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                    height: 1.3)),
+                            const SizedBox(height: 3),
+                            BodyText(AppCopy.trustCards[i].desc,
+                                size: 13, color: AppColors.mutedForeground),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          );
-        }),
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }
 }
 
-// ─────────────── 마스터 엔진 지원 분석 주제 (LIVE) ───────────────
-class _ComingSoonSection extends StatelessWidget {
-  const _ComingSoonSection();
+// ─────────────── FAQ ───────────────
+/// 평소에는 한 줄로 접혀 있고, 누르면 질문 목록이 펼쳐진다.
+class _FaqSection extends StatefulWidget {
+  const _FaqSection();
   @override
-  Widget build(BuildContext context) {
-    return SoftCard(
-      color: AppColors.backgroundAlt,
-      shadow: const [],
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('이런 것도 물어볼 수 있어요',
-                  style: AppTheme.serif(size: 17, weight: FontWeight.w700)),
-              const SizedBox(width: 10),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.gold.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '바로 가능',
-                  style: AppTheme.sans(
-                      size: 11,
-                      weight: FontWeight.w700,
-                      color: AppColors.accent,
-                      height: 1),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '질문을 적는 칸이나 리포트 아래 [이어서 물어보기]에서 바로 물어볼 수 있습니다.',
-            style: AppTheme.sans(size: 12.5, color: AppColors.mutedForeground),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: comingSoonList
-                .map((t) => Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.card,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: AppColors.muted, width: 1.2),
-                      ),
-                      child: Text(t,
-                          style: AppTheme.sans(
-                              size: 12.5,
-                              color: AppColors.primary,
-                              weight: FontWeight.w500,
-                              height: 1)),
-                    ))
-                .toList(),
-          ),
-        ],
-      ),
-    );
-  }
+  State<_FaqSection> createState() => _FaqSectionState();
 }
 
-// ─────────────── FAQ ───────────────
-class _FaqSection extends StatelessWidget {
-  const _FaqSection();
+class _FaqSectionState extends State<_FaqSection> {
+  bool _open = false;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(eyebrow: 'FAQ', title: '자주 묻는 질문'),
-        const SizedBox(height: 16),
-        ...AppCopy.faqs.map((f) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _FaqTile(item: f),
-            )),
+        InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          onTap: () => setState(() => _open = !_open),
+          child: SoftCard(
+            shadow: const [],
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('자주 묻는 질문',
+                      style: AppTheme.sans(
+                          size: 14.5,
+                          weight: FontWeight.w700,
+                          color: AppColors.primary,
+                          height: 1.3)),
+                ),
+                Icon(
+                    _open
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size: 22,
+                    color: AppColors.mutedForeground),
+              ],
+            ),
+          ),
+        ),
+        if (_open) ...[
+          const SizedBox(height: 10),
+          ...AppCopy.faqs.map((f) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _FaqTile(item: f),
+              )),
+        ],
       ],
     );
   }
